@@ -1,0 +1,78 @@
+import React from 'react';
+import { View, StyleSheet } from 'react-native';
+import { Text } from 'react-native-paper';
+import { format, parseISO } from 'date-fns';
+import { Message } from '../types';
+
+interface ChatBubbleProps {
+  message: Message;
+  isOwn: boolean;
+}
+
+export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, isOwn }) => {
+  const time = parseISO(message.createdAt);
+
+  return (
+    <View style={[styles.container, isOwn && styles.ownContainer]}>
+      {!isOwn && (
+        <Text variant="bodySmall" style={styles.userName}>
+          {message.userName}
+        </Text>
+      )}
+      <View style={[styles.bubble, isOwn && styles.ownBubble]}>
+        <Text variant="bodyMedium" style={[styles.text, isOwn && styles.ownText]}>
+          {message.text}
+        </Text>
+        <Text variant="bodySmall" style={[styles.time, isOwn && styles.ownTime]}>
+          {format(time, 'h:mm a')}
+        </Text>
+      </View>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    marginVertical: 4,
+    marginHorizontal: 16,
+    alignItems: 'flex-start',
+  },
+  ownContainer: {
+    alignItems: 'flex-end',
+  },
+  userName: {
+    marginBottom: 4,
+    marginLeft: 12,
+    color: '#666',
+    fontSize: 12,
+  },
+  bubble: {
+    maxWidth: '75%',
+    backgroundColor: '#F5F5F5',
+    padding: 12,
+    borderRadius: 16,
+    borderBottomLeftRadius: 4,
+  },
+  ownBubble: {
+    backgroundColor: '#6200EE',
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 4,
+  },
+  text: {
+    color: '#000',
+    marginBottom: 4,
+  },
+  ownText: {
+    color: '#FFF',
+  },
+  time: {
+    color: '#666',
+    fontSize: 10,
+    alignSelf: 'flex-end',
+  },
+  ownTime: {
+    color: '#FFF',
+    opacity: 0.8,
+  },
+});
+
