@@ -28,13 +28,34 @@ public class Message {
     
     @Column(nullable = false, columnDefinition = "TEXT")
     private String text;
-    
+
+    @Column(name = "is_deleted", nullable = false)
+    private Boolean isDeleted = false;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
-    
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
+    }
+
+    /**
+     * Soft delete this message
+     */
+    public void markDeleted() {
+        this.isDeleted = true;
+    }
+
+    /**
+     * Check if message should be auto-deleted (24h after activity end)
+     */
+    public boolean shouldAutoDelete(LocalDateTime activityEndTime) {
+        if (activityEndTime == null) {
+            return false;
+        }
+        LocalDateTime deleteThreshold = activityEndTime.plusHours(24);
+        return LocalDateTime.now().isAfter(deleteThreshold);
     }
 }
 

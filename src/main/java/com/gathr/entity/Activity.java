@@ -38,7 +38,18 @@ public class Activity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by", nullable = false)
     private User createdBy;
-    
+
+    @Column(name = "is_invite_only", nullable = false)
+    private Boolean isInviteOnly = false;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @PrePersist
+    protected void onCreate() {
+        createdAt = LocalDateTime.now();
+    }
+
     public enum ActivityCategory {
         SPORTS, FOOD, ART, MUSIC
     }

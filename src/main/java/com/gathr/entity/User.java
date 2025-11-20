@@ -26,7 +26,10 @@ public class User {
     
     @Column(nullable = false)
     private Boolean verified = false;
-    
+
+    @Column(name = "is_banned", nullable = false)
+    private Boolean isBanned = false;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
     
