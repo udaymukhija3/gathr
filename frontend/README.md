@@ -1,192 +1,323 @@
-# gathr Mobile App
+# Gatherly Mobile App
 
-React Native + Expo mobile app for gathr - small group hangouts around activities in Gurgaon.
-
-## Features
-
-- **Auth Flow**: Phone number entry with OTP verification (mock implementation)
-- **Feed Screen**: "Tonight in Gurgaon" - Browse activities by hub with hub selector
-- **Activity Detail**: View activity details, participants, mutual counts, and join activities
-- **Group Chat**: Real-time messaging for activity groups (polling-based, WebSocket ready)
-- **Invite Screen**: Share invite links and send phone invitations
-- **Create Activity**: Form to create new activities with category, hub, time, and invite-only options
+React Native + Expo frontend for Gatherly - small group hangouts around activities in Gurgaon.
 
 ## Tech Stack
 
-- **React Native** with **Expo** (~50.0.0)
-- **TypeScript**
-- **React Navigation** (Stack Navigator)
-- **React Native Paper** (UI Components)
-- **Expo SecureStore** (JWT token storage)
-- **date-fns** (Date formatting)
+- **Framework**: React Native + Expo (~50.0.0)
+- **Language**: TypeScript
+- **UI Library**: React Native Paper
+- **Navigation**: React Navigation (Stack)
+- **State Management**: React Context + Hooks
+- **Networking**: Axios (REST), WebSocket (real-time with polling fallback)
+- **Storage**: Expo SecureStore (JWT tokens)
+- **Contact Hashing**: js-sha256
+
+## Features
+
+- ✅ Phone OTP authentication with rate limiting
+- ✅ Hub-based activity discovery
+- ✅ Activity creation and joining
+- ✅ Invite-only activities with token system
+- ✅ Real-time chat (WebSocket + polling fallback)
+- ✅ Mutual contacts discovery (privacy-first hashing)
+- ✅ Identity reveal logic (server-authoritative)
+- ✅ Max group size enforcement
+- ✅ Message expiry countdown
+- ✅ Report & moderation
+- ✅ Mock mode for offline development
 
 ## Prerequisites
 
 - Node.js 18+ and npm/yarn
 - Expo CLI: `npm install -g expo-cli`
-- iOS Simulator (Mac) or Android Emulator, or Expo Go app on physical device
+- iOS Simulator (Mac) or Android Emulator / Physical device
+- Backend API running (or use mock mode)
 
-## Setup
+## Installation
 
-1. **Install dependencies**:
+1. **Clone and navigate to frontend:**
 ```bash
 cd frontend
 npm install
 ```
 
-2. **Configure API URL** (optional):
-Create a `.env` file in the `frontend` directory:
-```
+2. **Set up environment variables:**
+Create a `.env` file in the `frontend` directory (copy from `.env.example`):
+```bash
+# API Configuration
 EXPO_PUBLIC_API_URL=http://localhost:8080
-EXPO_PUBLIC_MOCK_MODE=true
+EXPO_PUBLIC_WS_URL=ws://localhost:8080
+
+# Mock Mode (optional - defaults to false for production)
+# Set to 'true' to use mock data for offline development
+# Omit or set to 'false' to use real API
+EXPO_PUBLIC_MOCK_MODE=true  # Remove this line for production
 ```
 
-3. **Start the development server**:
+3. **Start the development server:**
 ```bash
 npm start
+# or
+expo start
 ```
 
-4. **Run on device/simulator**:
+4. **Run on device:**
+- Scan QR code with Expo Go app (iOS/Android)
 - Press `i` for iOS simulator
 - Press `a` for Android emulator
-- Scan QR code with Expo Go app on physical device
+- Press `w` for web browser
 
 ## Mock Mode
 
-The app runs in **mock mode by default**, which means it uses local mock data instead of making API calls to the backend. This allows you to test the app without a running backend server.
+To run entirely offline without backend:
 
-### Switching to Real API
+1. Set `EXPO_PUBLIC_MOCK_MODE=true` in `.env`
+2. All API calls will use local mock data instead of hitting the backend
 
-To connect to the real backend:
+**IMPORTANT**:
+- **Production builds default to real API mode** (mock mode OFF)
+- Only enable mock mode explicitly for offline development
+- Never deploy with `EXPO_PUBLIC_MOCK_MODE=true`
 
-1. Set `EXPO_PUBLIC_MOCK_MODE=false` in your `.env` file
-2. Ensure the backend is running on `http://localhost:8080` (or update `EXPO_PUBLIC_API_URL`)
-3. Restart the Expo development server
+Mock mode includes:
+- 3 hubs (Cyberhub, Galleria, 32nd Avenue)
+- 5 sample activities
+- Mock authentication (always accepts OTP "123456")
+- Mock messages and participants
 
-### Mock Data
+## Testing Contact Upload
 
-The mock data includes:
-- 3 hubs: Cyberhub, Galleria, 32nd Avenue
-- 5 sample activities across different categories
-- Sample messages for activities
+1. **Grant contacts permission:**
+   - iOS: Settings > Privacy > Contacts > Gatherly
+   - Android: App permissions > Contacts
+
+2. **Test with sample numbers:**
+   - The app normalizes phone numbers to E.164 format
+   - Hashes are computed client-side using SHA-256
+   - Only hashes are sent to backend (never raw contacts)
+
+3. **Sample test flow:**
+   ```typescript
+   // Example: Phone "+919876543210" becomes hash
+   // Hash is sent: ["abc123...", "def456..."]
+   // Backend returns: { mutualsCount: 3 }
+   ```
+
+## Testing Multi-Device Flows
+
+1. **Start Expo on your machine:**
+   ```bash
+   expo start
+   ```
+
+2. **Connect two devices:**
+   - Device 1: Scan QR code, login as User A
+   - Device 2: Scan QR code, login as User B
+
+3. **Test join → chat flow:**
+   - User A creates activity
+   - User B joins activity
+   - Both users enter chat room
+   - Send messages (should appear in real-time)
+
+4. **Test invite token flow:**
+   - User A creates invite-only activity
+   - User A generates invite token
+   - User B enters token to join
 
 ## Project Structure
 
 ```
 frontend/
 ├── src/
-│   ├── components/       # Reusable UI components
+│   ├── components/          # Reusable UI components
 │   │   ├── ActivityCard.tsx
-│   │   ├── HubSelector.tsx
-│   │   ├── MutualBadge.tsx
 │   │   ├── AvatarAnon.tsx
-│   │   └── ChatBubble.tsx
-│   ├── screens/          # Screen components
+│   │   ├── HubSelector.tsx
+│   │   ├── InviteModal.tsx
+│   │   └── MutualBadge.tsx
+│   ├── screens/             # Screen components
 │   │   ├── PhoneEntryScreen.tsx
 │   │   ├── OtpVerifyScreen.tsx
-│   │   ├── FeedScreen.tsx
+│   │   ├── FeedScreen.tsx (HomeScreen)
 │   │   ├── ActivityDetailScreen.tsx
 │   │   ├── ChatScreen.tsx
-│   │   ├── InviteScreen.tsx
-│   │   └── CreateActivityScreen.tsx
-│   ├── services/         # API service layer
+│   │   ├── CreateActivityScreen.tsx
+│   │   ├── ContactsUploadScreen.tsx
+│   │   └── SettingsScreen.tsx
+│   ├── context/             # React Context
+│   │   └── UserContext.tsx
+│   ├── hooks/               # Custom hooks
+│   │   ├── useApi.ts
+│   │   └── useWebSocket.ts
+│   ├── services/            # API services
 │   │   └── api.ts
-│   ├── types/            # TypeScript type definitions
+│   ├── utils/               # Utilities
+│   │   └── contactHashing.ts
+│   ├── types/               # TypeScript types
 │   │   └── index.ts
-│   └── theme.ts          # App theme configuration
-├── App.tsx               # Main app component with navigation
-├── index.js              # App entry point
+│   ├── mock/                # Mock data
+│   │   └── data.json
+│   └── theme.ts             # Theme configuration
+├── App.tsx                  # Root component
 ├── package.json
+├── tsconfig.json
 └── README.md
 ```
 
-## API Endpoints
+## API Endpoints (Backend Integration)
 
-The app consumes the following backend endpoints:
+The frontend expects these backend endpoints:
 
 ### Authentication
-- `POST /auth/otp/start` - Start OTP verification
-- `POST /auth/otp/verify` - Verify OTP and get JWT token
+- `POST /auth/otp/start` - Start OTP (rate limited: 3/hour)
+  - Body: `{ phone: string }`
+  - Returns: `{ message: string }` or `429 Too Many Requests`
 
-### Hubs
-- `GET /hubs` - Get all hubs
+- `POST /auth/otp/verify` - Verify OTP
+  - Body: `{ phone: string, otp: string }`
+  - Returns: `{ token: string, user: User }`
 
 ### Activities
-- `GET /activities?hub_id={id}` - Get activities for a hub
+- `GET /activities?hub_id=<id>&date=<YYYY-MM-DD>` - Get activities
+  - Returns: `Activity[]` with `peopleCount`, `mutualsCount`, `isInviteOnly`, `revealIdentities`, `maxMembers`
+
 - `GET /activities/:id` - Get activity details
-- `POST /activities` - Create new activity
-- `POST /activities/:id/join?status={INTERESTED|CONFIRMED}` - Join activity
+  - Returns: `ActivityDetail` with `participants[]` (anon if `revealIdentities=false`)
+
+- `POST /activities` - Create activity
+  - Body: `{ title, hubId, category, startTime, endTime, isInviteOnly?, maxMembers? }`
+
+- `POST /activities/:id/join?status=INTERESTED|CONFIRMED&inviteToken=<token>` - Join activity
+  - Returns: `409 Conflict` if max members reached
+  - Returns: `403 Forbidden` if invite token missing/invalid
+
+- `POST /activities/:id/invite-token` - Generate invite token
+  - Returns: `{ token: string, expiresAt: string }`
+
+- `POST /activities/:id/confirm` - Confirm participation (heading now)
 
 ### Messages
-- `GET /activities/:id/messages` - Get messages for an activity
-- `POST /activities/:id/messages` - Send a message
+- `GET /activities/:id/messages?since=<timestamp>` - Get messages (polling)
+  - Returns: `Message[]`
 
-### Invites
-- `POST /activities/:id/invite` - Send invitation by phone (mock)
+- `POST /activities/:id/messages` - Send message
+  - Body: `{ text: string }`
 
-## Key Features
+### WebSocket
+- `ws://<base>/ws/activities/:id?token=<jwt>` - Real-time messages
+  - Messages: `{ type: 'message'|'join'|'leave'|'heading_now'|'reveal', payload: {...} }`
 
-### Safety & Privacy
-- **Anonymity**: Participants are shown as "Member #X" until the group is confirmed (3+ participants, 1+ confirmed)
-- **Mutual Counts**: Display mutual friend counts without revealing identities
-- **Invite-Only Activities**: Locked activities require invitation to join
-- **Safety Tips**: UI hints when participant count is low
+### Reports
+- `POST /reports` - Create report
+  - Body: `{ targetUserId: number, activityId?: number, reason: string }`
 
-### User Experience
-- **Hub Selector**: Easy switching between different hubs (Cyberhub, Galleria, 32nd Avenue)
-- **Activity Cards**: Rich cards showing category, time, participant count, and mutuals
-- **Real-time Chat**: Polling-based messaging (3s interval) with WebSocket support ready
-- **Ephemeral Messages**: Messages auto-clear 24 hours after activity ends (UI note)
+### Contacts
+- `POST /contacts/upload` - Upload hashed contacts
+  - Body: `{ hashes: string[] }`
+  - Returns: `{ mutualsCount: number }`
 
-### Navigation Flow
-1. **Auth** → Phone entry → OTP verification
-2. **Feed** → Browse activities → Select activity
-3. **Activity Detail** → View details → Join → Chat/Invite
-4. **Chat** → Real-time messaging → Confirm attendance
-5. **Create Activity** → Form → Submit → View activity
+## Key Features Implementation
 
-## Development
+### Invite Token Flow
+1. User creates invite-only activity
+2. User generates invite token via `POST /activities/:id/invite-token`
+3. Token shared via SMS or link
+4. Recipient enters token when joining
+5. Backend validates token (expiry, validity)
 
-### Running Tests
+### Identity Reveal Logic
+- Frontend displays based on `revealIdentities` flag from backend
+- If `false`: Shows anonymized avatars + mutualsCount
+- If `true`: Shows firstName + avatar
+- Server controls reveal (>=3 confirmed OR >=3 interested)
+
+### Max Group Size
+- Frontend disables join button if `peopleCount >= maxMembers`
+- Shows "Full" message
+- Backend enforces with `409 Conflict` response
+
+### Message Expiry
+- Calculates: `activity.endTime + 24h`
+- Shows countdown in chat header
+- Messages auto-deleted after expiry (backend job)
+
+### Mutual Contacts
+- User grants contacts permission
+- Phone numbers normalized to E.164
+- Hashed client-side with SHA-256
+- Only hashes sent to backend
+- Backend returns intersection count
+- Displayed as "X mutuals" (never reveals who)
+
+## Running Tests
+
 ```bash
 npm test
 ```
 
-### Building for Production
-```bash
-expo build:android
-expo build:ios
-```
+Tests cover:
+- ActivityCard rendering (locked/unlocked)
+- Anonymity → reveal behavior
+- Invite token validation UI
 
-### Environment Variables
-- `EXPO_PUBLIC_API_URL` - Backend API URL (default: http://localhost:8080)
-- `EXPO_PUBLIC_MOCK_MODE` - Enable mock mode (default: true)
-- `EXPO_PUBLIC_APP_URL` - App URL for invite links (default: https://gathr.app)
+## Environment Variables
 
-## Known Limitations
-
-1. **Date Picker**: The create activity screen uses a simplified time picker. Full date/time picker can be added later.
-2. **WebSocket**: Currently using polling (3s interval). WebSocket support is ready to be integrated.
-3. **Mock OTP**: OTP verification accepts any non-empty string in mock mode.
-4. **Participant Counts**: Backend doesn't return `peopleCount` and `mutualsCount` directly - these are calculated/mocked in the frontend.
+| Variable | Description | Default | Production |
+|----------|-------------|---------|------------|
+| `EXPO_PUBLIC_API_URL` | Backend API base URL | `http://localhost:8080` | Set to production API URL |
+| `EXPO_PUBLIC_WS_URL` | WebSocket base URL | `ws://localhost:8080` | Set to production WS URL |
+| `EXPO_PUBLIC_MOCK_MODE` | Use mock data (dev only) | `false` | **Do not set** (defaults to false) |
 
 ## Troubleshooting
 
-### Metro Bundler Issues
-```bash
-npx expo start --clear
-```
+### WebSocket Connection Issues
+- Check `EXPO_PUBLIC_WS_URL` is correct
+- Verify backend WebSocket endpoint is running
+- App automatically falls back to polling if WS fails
 
-### Android Emulator Issues
-Ensure Android emulator is running and ADB is connected:
-```bash
-adb devices
-```
+### Rate Limiting (OTP)
+- Frontend shows friendly error for 429 responses
+- Rate limit: 3 requests per hour per phone
+- Error message: "Too many requests. Please try again later."
 
-### iOS Simulator Issues
-Ensure Xcode and iOS Simulator are installed (Mac only).
+### Contacts Permission Denied
+- iOS: Settings > Privacy > Contacts
+- Android: App Settings > Permissions
+- App shows error toast if permission denied
+
+### Mock Mode Not Working
+- Ensure `EXPO_PUBLIC_MOCK_MODE=true` in `.env` (must be exactly 'true')
+- Restart Expo server after changing env vars (kill and restart `npm start`)
+- Verify mock data exists in `src/services/api.ts` (MOCK_HUBS, MOCK_ACTIVITIES)
+
+### Real API Not Working (Getting Mock Data in Production)
+- Remove `EXPO_PUBLIC_MOCK_MODE=true` from `.env` or set to 'false'
+- Check API_BASE_URL is pointing to the correct backend
+- Clear Expo cache: `expo start -c`
+
+## Backend Integration Checklist
+
+Before connecting to real backend, ensure:
+
+- [ ] Backend has all endpoints listed above
+- [ ] CORS configured for Expo dev server (`http://localhost:19006`, etc.)
+- [ ] WebSocket endpoint accepts JWT in query param
+- [ ] Rate limiting returns proper 429 status
+- [ ] Invite token validation returns 403 for invalid tokens
+- [ ] Max members enforcement returns 409 when full
+- [ ] Contact upload endpoint accepts `{ hashes: string[] }`
+- [ ] Activity responses include all new fields (`revealIdentities`, `maxMembers`, etc.)
+
+## Development Notes
+
+- **State Management**: Uses React Context for user/auth state, local state for UI
+- **Error Handling**: Global error handler shows toast notifications
+- **Offline Support**: Mock mode allows full offline development
+- **Real-time**: WebSocket with automatic polling fallback
+- **Security**: JWT stored in SecureStore, never logged
 
 ## License
 
 MIT
-

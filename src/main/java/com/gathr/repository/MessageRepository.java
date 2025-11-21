@@ -16,5 +16,11 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
            "LEFT JOIN FETCH m.activity " +
            "WHERE m.activity.id = :activityId ORDER BY m.createdAt ASC")
     List<Message> findByActivityIdOrderByCreatedAtAsc(@Param("activityId") Long activityId);
+
+    @Query("SELECT m FROM Message m " +
+           "JOIN m.activity a " +
+           "WHERE m.createdAt < :threshold " +
+           "AND a.endTime < :threshold")
+    List<Message> findExpiredMessages(@Param("threshold") java.time.LocalDateTime threshold);
 }
 

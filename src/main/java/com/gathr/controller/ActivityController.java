@@ -2,23 +2,28 @@ package com.gathr.controller;
 
 import com.gathr.dto.ActivityDto;
 import com.gathr.dto.CreateActivityRequest;
+import com.gathr.entity.InviteToken;
 import com.gathr.entity.Participation;
 import com.gathr.service.ActivityService;
+import com.gathr.service.InviteTokenService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/activities")
 public class ActivityController {
     
     private final ActivityService activityService;
+    private final InviteTokenService inviteTokenService;
     
-    public ActivityController(ActivityService activityService) {
+    public ActivityController(ActivityService activityService, InviteTokenService inviteTokenService) {
         this.activityService = activityService;
+        this.inviteTokenService = inviteTokenService;
     }
     
     @GetMapping
@@ -49,6 +54,7 @@ public class ActivityController {
     public ResponseEntity<?> joinActivity(
             @PathVariable Long id,
             @RequestParam(defaultValue = "INTERESTED") String status,
+            @RequestParam(required = false) String inviteToken,
             Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
         Participation.ParticipationStatus participationStatus;
@@ -57,9 +63,30 @@ public class ActivityController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(new ErrorResponse("Invalid status. Use INTERESTED or CONFIRMED"));
         }
-        
-        activityService.joinActivity(id, userId, participationStatus);
+
+        activityService.joinActivity(id, userId, participationStatus, inviteToken);
         return ResponseEntity.ok().body(new MessageResponse("Successfully joined activity"));
+    }
+
+    @PostMapping("/{id}/confirm")
+    public ResponseEntity<?> confirmActivity(
+            @PathVariable Long id,
+            Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        activityService.confirmActivity(id, userId);
+        return ResponseEntity.ok().body(new MessageResponse("Successfully confirmed attendance"));
+    }
+
+    @PostMapping("/{id}/invite-token")
+    public ResponseEntity<?> generateInviteToken(
+            @PathVariable Long id,
+            Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        InviteToken token = inviteTokenService.generateInviteToken(id, userId);
+        return ResponseEntity.ok().body(Map.of(
+            "token", token.getToken(),
+            "expiresAt", token.getExpiresAt()
+        ));
     }
     
     private record MessageResponse(String message) {}

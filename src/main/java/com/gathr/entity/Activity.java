@@ -42,6 +42,12 @@ public class Activity {
     @Column(name = "is_invite_only", nullable = false)
     private Boolean isInviteOnly = false;
 
+    @Column(name = "max_members", nullable = false)
+    private Integer maxMembers = 4;
+
+    @Column(name = "reveal_identities", nullable = false)
+    private Boolean revealIdentities = false;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

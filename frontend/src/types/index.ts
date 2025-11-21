@@ -25,9 +25,14 @@ export interface Activity {
   endTime: string;
   createdBy: number;
   createdByName: string;
-  peopleCount?: number;
+  interestedCount?: number;
+  confirmedCount?: number;
+  totalParticipants?: number;
+  peopleCount?: number; // Alias for totalParticipants
   mutualsCount?: number;
   isInviteOnly?: boolean;
+  revealIdentities?: boolean;
+  maxMembers?: number;
   description?: string;
 }
 
@@ -65,8 +70,52 @@ export interface CreateActivityRequest {
   startTime: string;
   endTime: string;
   description?: string;
-  inviteOnly?: boolean;
+  isInviteOnly?: boolean;
+  maxMembers?: number;
+}
+
+export interface Participant {
+  userId: number;
+  firstName?: string;
+  mutualsCount?: number;
+  revealed?: boolean;
+}
+
+export interface ReportRequest {
+  targetUserId: number;
+  activityId?: number;
+  reason: string;
+}
+
+export interface ContactUploadRequest {
+  hashes: string[];
+}
+
+export interface ContactUploadResponse {
+  mutualsCount: number;
 }
 
 export type ParticipationStatus = 'INTERESTED' | 'CONFIRMED';
+
+export interface ActivityTemplate {
+  id: number;
+  name: string;
+  title: string;
+  category: ActivityCategory;
+  durationHours?: number;
+  description?: string;
+  isSystemTemplate: boolean;
+  isInviteOnly: boolean;
+  maxMembers: number;
+}
+
+export interface CreateTemplateRequest {
+  name: string;
+  title: string;
+  category: ActivityCategory;
+  durationHours?: number;
+  description?: string;
+  isInviteOnly?: boolean;
+  maxMembers?: number;
+}
 

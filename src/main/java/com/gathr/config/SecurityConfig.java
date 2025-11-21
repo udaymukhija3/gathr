@@ -37,8 +37,31 @@ public class SecurityConfig {
         http.csrf(csrf -> csrf.disable())
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .headers(headers -> headers
+                // Prevent clickjacking attacks
+                .frameOptions(frameOptions -> frameOptions.deny())
+                // Prevent MIME-sniffing (X-Content-Type-Options: nosniff)
+                .contentTypeOptions(contentTypeOptions -> {})
+                // Enable XSS protection in older browsers
+                .xssProtection(xss -> xss.headerValue("1; mode=block"))
+                // Content Security Policy
+                .contentSecurityPolicy(csp -> csp
+                    .policyDirectives("default-src 'self'; " +
+                        "script-src 'self' 'unsafe-inline'; " +
+                        "style-src 'self' 'unsafe-inline'; " +
+                        "img-src 'self' data: https:; " +
+                        "font-src 'self' data:; " +
+                        "connect-src 'self' ws: wss:; " +
+                        "frame-ancestors 'none'")
+                )
+                // Enforce HTTPS (uncomment in production with HTTPS)
+                // .httpStrictTransportSecurity(hsts -> hsts
+                //     .includeSubDomains(true)
+                //     .maxAgeInSeconds(31536000)
+                // )
+            )
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/auth/**", "/actuator/health").permitAll()
+                .requestMatchers("/auth/**", "/actuator/health", "/health/**").permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

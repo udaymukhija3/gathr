@@ -10,10 +10,15 @@ import com.gathr.repository.UserRepository;
 import com.gathr.security.JwtUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class AuthService {
@@ -22,29 +27,80 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final JwtUtil jwtUtil;
+    private final OtpService otpService;
 
-    // Mock OTP storage (in production, use Redis or database)
-    private static final String MOCK_OTP = "123456";
+    // Rate limiting: max 3 requests per hour per phone
+    // In-memory storage (use Redis in production)
+    private final Map<String, OtpRequestRecord> otpRequestHistory = new ConcurrentHashMap<>();
+    private static final int MAX_REQUESTS_PER_HOUR = 3;
+    private static final int RATE_LIMIT_WINDOW_HOURS = 1;
 
-    public AuthService(UserRepository userRepository, JwtUtil jwtUtil) {
+    public AuthService(UserRepository userRepository, JwtUtil jwtUtil, OtpService otpService) {
         this.userRepository = userRepository;
         this.jwtUtil = jwtUtil;
+        this.otpService = otpService;
     }
 
     public void startOtp(AuthRequest request) {
-        // Mock OTP sending - in production, integrate with SMS service
-        // For now, we just log it. The OTP is always "123456" for testing
-        logger.info("Mock: Sending OTP {} to {}", MOCK_OTP, request.getPhone());
+        String phone = request.getPhone();
+        
+        // Rate limiting check
+        OtpRequestRecord record = otpRequestHistory.get(phone);
+        LocalDateTime now = LocalDateTime.now();
+        
+        if (record != null) {
+            // Remove old requests outside the window
+            record.removeOldRequests(now.minusHours(RATE_LIMIT_WINDOW_HOURS));
+            
+            if (record.getRequestCount() >= MAX_REQUESTS_PER_HOUR) {
+                logger.warn("Rate limit exceeded for phone: {}", phone);
+                throw new ResponseStatusException(
+                    HttpStatus.TOO_MANY_REQUESTS,
+                    "Too many OTP requests. Please try again later."
+                );
+            }
+            
+            record.addRequest(now);
+        } else {
+            record = new OtpRequestRecord();
+            record.addRequest(now);
+            otpRequestHistory.put(phone, record);
+        }
+
+        // Send OTP via configured OtpService (mock or Twilio)
+        String otp = otpService.sendOtp(phone);
+        logger.info("OTP sent to {}", phone);
+    }
+
+    // Helper class for rate limiting
+    private static class OtpRequestRecord {
+        private final java.util.List<LocalDateTime> requests = new java.util.ArrayList<>();
+
+        public void addRequest(LocalDateTime timestamp) {
+            requests.add(timestamp);
+        }
+
+        public void removeOldRequests(LocalDateTime threshold) {
+            requests.removeIf(timestamp -> timestamp.isBefore(threshold));
+        }
+
+        public int getRequestCount() {
+            return requests.size();
+        }
     }
 
     @Transactional
     public AuthResponse verifyOtp(OtpVerifyRequest request) {
-        // Mock OTP verification - accept any non-empty OTP for testing
-        // In production, verify against stored OTP with expiry
+        // Verify OTP using OtpService
         if (request.getOtp() == null || request.getOtp().trim().isEmpty()) {
-            throw new InvalidRequestException("Invalid OTP");
+            throw new InvalidRequestException("OTP cannot be empty");
         }
-        
+
+        boolean isValid = otpService.verifyOtp(request.getPhone(), request.getOtp());
+        if (!isValid) {
+            throw new InvalidRequestException("Invalid or expired OTP");
+        }
+
         // Find or create user
         Optional<User> userOpt = userRepository.findByPhone(request.getPhone());
         User user;

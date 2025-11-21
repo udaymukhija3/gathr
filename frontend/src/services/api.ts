@@ -1,10 +1,12 @@
 import * as SecureStore from 'expo-secure-store';
-import { Activity, ActivityDetail, AuthResponse, CreateActivityRequest, Hub, Message, User } from '../types';
+import { Activity, ActivityDetail, ActivityTemplate, AuthResponse, CreateActivityRequest, CreateTemplateRequest, Hub, Message, User } from '../types';
 
 // Mock mode: Set to true to use mock data, false to use real API
 // Can be toggled via EXPO_PUBLIC_MOCK_MODE environment variable
+// PRODUCTION: Defaults to false (real API mode)
+// DEVELOPMENT: Set EXPO_PUBLIC_MOCK_MODE=true to use mock data
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8080';
-const MOCK_MODE = process.env.EXPO_PUBLIC_MOCK_MODE !== 'false'; // Default to true (mock mode)
+const MOCK_MODE = process.env.EXPO_PUBLIC_MOCK_MODE === 'true'; // Default to false (production mode)
 
 // Mock data
 const MOCK_HUBS: Hub[] = [
@@ -261,16 +263,43 @@ export const activitiesApi = {
     });
   },
 
-  join: async (id: number, status: 'INTERESTED' | 'CONFIRMED'): Promise<void> => {
+  join: async (id: number, status: 'INTERESTED' | 'CONFIRMED', inviteToken?: string): Promise<void> => {
     if (MOCK_MODE) {
-      console.log('Mock: Joining activity', id, 'with status', status);
+      console.log('Mock: Joining activity', id, 'with status', status, 'token:', inviteToken);
       const activity = MOCK_ACTIVITIES.find(a => a.id === id);
       if (activity) {
         activity.peopleCount = (activity.peopleCount || 0) + 1;
       }
       return;
     }
-    await apiRequest(`/activities/${id}/join?status=${status}`, {
+    const params = new URLSearchParams({ status });
+    if (inviteToken) {
+      params.append('inviteToken', inviteToken);
+    }
+    await apiRequest(`/activities/${id}/join?${params.toString()}`, {
+      method: 'POST',
+    });
+  },
+
+  confirm: async (id: number): Promise<void> => {
+    if (MOCK_MODE) {
+      console.log('Mock: Confirming activity', id);
+      return;
+    }
+    await apiRequest(`/activities/${id}/confirm`, {
+      method: 'POST',
+    });
+  },
+
+  generateInviteToken: async (id: number): Promise<{ token: string; expiresAt: string }> => {
+    if (MOCK_MODE) {
+      const mockToken = 'mock_token_' + Date.now();
+      return {
+        token: mockToken,
+        expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
+      };
+    }
+    return apiRequest<{ token: string; expiresAt: string }>(`/activities/${id}/invite-token`, {
       method: 'POST',
     });
   },
@@ -289,11 +318,16 @@ export const activitiesApi = {
 
 // Messages API
 export const messagesApi = {
-  getByActivity: async (activityId: number): Promise<Message[]> => {
+  getByActivity: async (activityId: number, since?: string): Promise<Message[]> => {
     if (MOCK_MODE) {
-      return MOCK_MESSAGES[activityId] || [];
+      const messages = MOCK_MESSAGES[activityId] || [];
+      if (since) {
+        return messages.filter(m => m.createdAt > since);
+      }
+      return messages;
     }
-    return apiRequest<Message[]>(`/activities/${activityId}/messages`);
+    const params = since ? `?since=${since}` : '';
+    return apiRequest<Message[]>(`/activities/${activityId}/messages${params}`);
   },
 
   create: async (activityId: number, text: string): Promise<Message> => {
@@ -315,6 +349,134 @@ export const messagesApi = {
     return apiRequest<Message>(`/activities/${activityId}/messages`, {
       method: 'POST',
       body: JSON.stringify({ text }),
+    });
+  },
+};
+
+// Reports API
+export const reportsApi = {
+  create: async (targetUserId: number, activityId: number | undefined, reason: string): Promise<void> => {
+    if (MOCK_MODE) {
+      console.log('Mock: Creating report', { targetUserId, activityId, reason });
+      return;
+    }
+    await apiRequest('/reports', {
+      method: 'POST',
+      body: JSON.stringify({ targetUserId, activityId, reason }),
+    });
+  },
+};
+
+// Contacts API
+export const contactsApi = {
+  upload: async (hashes: string[]): Promise<{ mutualsCount: number }> => {
+    if (MOCK_MODE) {
+      return { mutualsCount: Math.floor(Math.random() * 5) };
+    }
+    return apiRequest<{ mutualsCount: number }>('/contacts/upload', {
+      method: 'POST',
+      body: JSON.stringify({ hashes }),
+    });
+  },
+};
+
+// Events API (Telemetry)
+export const eventsApi = {
+  log: async (
+    eventType: string,
+    properties?: Record<string, any>,
+    activityId?: number
+  ): Promise<void> => {
+    if (MOCK_MODE) {
+      console.log('[Telemetry]', eventType, { activityId, ...properties });
+      return;
+    }
+
+    try {
+      // Non-blocking: fire and forget
+      await apiRequest('/events', {
+        method: 'POST',
+        body: JSON.stringify({
+          eventType,
+          activityId,
+          properties,
+        }),
+      });
+    } catch (error) {
+      // Silently fail - telemetry should never break the main flow
+      console.warn('Failed to log event:', eventType, error);
+    }
+  },
+};
+
+// Templates API
+export const templatesApi = {
+  getAll: async (type: 'all' | 'system' | 'user' = 'all'): Promise<ActivityTemplate[]> => {
+    if (MOCK_MODE) {
+      const mockTemplates: ActivityTemplate[] = [
+        {
+          id: 1,
+          name: 'Coffee Meetup',
+          title: 'Coffee at Galleria',
+          category: 'FOOD',
+          durationHours: 1,
+          description: 'Casual coffee meetup to chat and connect',
+          isSystemTemplate: true,
+          isInviteOnly: false,
+          maxMembers: 4,
+        },
+        {
+          id: 2,
+          name: 'Pickup Basketball',
+          title: 'Pickup Basketball Game',
+          category: 'SPORTS',
+          durationHours: 2,
+          description: 'Casual basketball game, all skill levels welcome',
+          isSystemTemplate: true,
+          isInviteOnly: false,
+          maxMembers: 8,
+        },
+        {
+          id: 3,
+          name: 'Study Session',
+          title: 'Study Group at Library',
+          category: 'ART',
+          durationHours: 3,
+          description: 'Focused study session with like-minded students',
+          isSystemTemplate: true,
+          isInviteOnly: false,
+          maxMembers: 6,
+        },
+      ];
+      return mockTemplates;
+    }
+    return apiRequest<ActivityTemplate[]>(`/templates?type=${type}`);
+  },
+
+  create: async (data: CreateTemplateRequest): Promise<ActivityTemplate> => {
+    if (MOCK_MODE) {
+      const newTemplate: ActivityTemplate = {
+        id: Math.floor(Math.random() * 10000),
+        ...data,
+        isSystemTemplate: false,
+        isInviteOnly: data.isInviteOnly || false,
+        maxMembers: data.maxMembers || 4,
+      };
+      return newTemplate;
+    }
+    return apiRequest<ActivityTemplate>('/templates', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete: async (id: number): Promise<void> => {
+    if (MOCK_MODE) {
+      console.log('Mock: Deleting template', id);
+      return;
+    }
+    await apiRequest(`/templates/${id}`, {
+      method: 'DELETE',
     });
   },
 };

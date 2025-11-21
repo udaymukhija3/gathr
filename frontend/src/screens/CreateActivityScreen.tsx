@@ -1,28 +1,36 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, StyleSheet, ScrollView } from 'react-native';
 import { TextInput, Button, Text, Card, SegmentedButtons, Checkbox } from 'react-native-paper';
 import { Platform } from 'react-native';
 import { format } from 'date-fns';
-import { Hub, ActivityCategory, CreateActivityRequest } from '../types';
+import Toast from 'react-native-toast-message';
+import { Hub, ActivityCategory, CreateActivityRequest, ActivityTemplate } from '../types';
 import { activitiesApi, hubsApi } from '../services/api';
 
 interface CreateActivityScreenProps {
+  template?: ActivityTemplate;
   onSubmit: (activityId: number) => void;
   onCancel: () => void;
 }
 
 export const CreateActivityScreen: React.FC<CreateActivityScreenProps> = ({
+  template,
   onSubmit,
   onCancel,
 }) => {
   const [hubs, setHubs] = useState<Hub[]>([]);
-  const [title, setTitle] = useState('');
-  const [category, setCategory] = useState<ActivityCategory>('FOOD');
+  const [title, setTitle] = useState(template?.title || '');
+  const [category, setCategory] = useState<ActivityCategory>(template?.category || 'FOOD');
   const [hubId, setHubId] = useState<number | null>(null);
   const [startTime, setStartTime] = useState(new Date());
-  const [endTime, setEndTime] = useState(new Date(Date.now() + 2 * 60 * 60 * 1000));
-  const [description, setDescription] = useState('');
-  const [inviteOnly, setInviteOnly] = useState(false);
+  const [endTime, setEndTime] = useState(
+    template?.durationHours
+      ? new Date(Date.now() + template.durationHours * 60 * 60 * 1000)
+      : new Date(Date.now() + 2 * 60 * 60 * 1000)
+  );
+  const [description, setDescription] = useState(template?.description || '');
+  const [inviteOnly, setInviteOnly] = useState(template?.isInviteOnly || false);
+  const [maxMembers, setMaxMembers] = useState(template?.maxMembers || 4);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -43,15 +51,27 @@ export const CreateActivityScreen: React.FC<CreateActivityScreenProps> = ({
 
   const handleSubmit = async () => {
     if (!title.trim()) {
-      Alert.alert('Error', 'Please enter a title');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Please enter a title',
+      });
       return;
     }
     if (!hubId) {
-      Alert.alert('Error', 'Please select a hub');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Please select a hub',
+      });
       return;
     }
     if (endTime <= startTime) {
-      Alert.alert('Error', 'End time must be after start time');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'End time must be after start time',
+      });
       return;
     }
 
@@ -64,14 +84,22 @@ export const CreateActivityScreen: React.FC<CreateActivityScreenProps> = ({
         startTime: startTime.toISOString(),
         endTime: endTime.toISOString(),
         description: description.trim() || undefined,
-        inviteOnly,
+        isInviteOnly: inviteOnly,
+        maxMembers,
       };
       const activity = await activitiesApi.create(request);
-      Alert.alert('Success', 'Activity created!', [
-        { text: 'OK', onPress: () => onSubmit(activity.id) },
-      ]);
+      Toast.show({
+        type: 'success',
+        text1: 'Success',
+        text2: 'Activity created!',
+      });
+      onSubmit(activity.id);
     } catch (error) {
-      Alert.alert('Error', 'Failed to create activity');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to create activity',
+      });
     } finally {
       setLoading(false);
     }
@@ -177,6 +205,21 @@ export const CreateActivityScreen: React.FC<CreateActivityScreenProps> = ({
             placeholder="Tell people more about this activity..."
           />
 
+          <Text variant="bodyMedium" style={styles.label}>
+            Max Members
+          </Text>
+          <TextInput
+            label="Maximum Members"
+            value={maxMembers.toString()}
+            onChangeText={(text) => {
+              const num = parseInt(text) || 4;
+              setMaxMembers(Math.max(2, Math.min(20, num)));
+            }}
+            keyboardType="number-pad"
+            mode="outlined"
+            style={styles.input}
+          />
+
           <View style={styles.checkboxContainer}>
             <Checkbox
               status={inviteOnly ? 'checked' : 'unchecked'}
@@ -186,6 +229,16 @@ export const CreateActivityScreen: React.FC<CreateActivityScreenProps> = ({
               Invite only (locked activity)
             </Text>
           </View>
+
+          {template && (
+            <Card style={styles.templateBadge}>
+              <Card.Content>
+                <Text variant="bodySmall" style={styles.templateText}>
+                  📝 Using template: {template.name}
+                </Text>
+              </Card.Content>
+            </Card>
+          )}
         </Card.Content>
       </Card>
 
@@ -265,6 +318,14 @@ const styles = StyleSheet.create({
   },
   button: {
     flex: 1,
+  },
+  templateBadge: {
+    marginTop: 16,
+    backgroundColor: '#E3F2FD',
+  },
+  templateText: {
+    color: '#1976D2',
+    fontStyle: 'italic',
   },
 });
 

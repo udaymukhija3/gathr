@@ -24,5 +24,8 @@ public class CreateActivityRequest {
     
     @NotNull(message = "End time is required")
     private LocalDateTime endTime;
+    
+    private Boolean isInviteOnly;
+    private Integer maxMembers;
 }
 

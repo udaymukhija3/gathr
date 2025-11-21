@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
-import { Provider as PaperProvider } from 'react-native-paper';
+import { Provider as PaperProvider, Portal } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { getToken } from './src/services/api';
+import Toast from 'react-native-toast-message';
+import { UserProvider, useUser } from './src/context/UserContext';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { theme } from './src/theme';
 import { PhoneEntryScreen } from './src/screens/PhoneEntryScreen';
 import { OtpVerifyScreen } from './src/screens/OtpVerifyScreen';
@@ -13,7 +15,10 @@ import { ActivityDetailScreen } from './src/screens/ActivityDetailScreen';
 import { ChatScreen } from './src/screens/ChatScreen';
 import { InviteScreen } from './src/screens/InviteScreen';
 import { CreateActivityScreen } from './src/screens/CreateActivityScreen';
-import { AuthResponse } from './src/types';
+import { ContactsUploadScreen } from './src/screens/ContactsUploadScreen';
+import { SettingsScreen } from './src/screens/SettingsScreen';
+import { TemplateSelectionScreen } from './src/screens/TemplateSelectionScreen';
+import { AuthResponse, ActivityTemplate } from './src/types';
 
 export type RootStackParamList = {
   PhoneEntry: undefined;
@@ -22,46 +27,22 @@ export type RootStackParamList = {
   ActivityDetail: { activityId: number };
   Chat: { activityId: number };
   Invite: { activityId: number };
-  CreateActivity: undefined;
+  TemplateSelection: undefined;
+  CreateActivity: { template?: ActivityTemplate };
+  ContactsUpload: undefined;
+  Settings: undefined;
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
 
-export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [authState, setAuthState] = useState<{
+function AppNavigator() {
+  const { user, isLoading } = useUser();
+  const [authState, setAuthState] = React.useState<{
     phone: string;
-    authResponse: AuthResponse | null;
-  }>({ phone: '', authResponse: null });
-
-  useEffect(() => {
-    checkAuth();
-  }, []);
-
-  const checkAuth = async () => {
-    try {
-      const token = await getToken();
-      setIsAuthenticated(!!token);
-    } catch (error) {
-      console.error('Error checking auth:', error);
-      setIsAuthenticated(false);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleOtpSent = (phone: string) => {
-    setAuthState({ ...authState, phone });
-  };
-
-  const handleOtpVerified = (authResponse: AuthResponse) => {
-    setAuthState({ ...authState, authResponse });
-    setIsAuthenticated(true);
-  };
+  }>({ phone: '' });
 
   if (isLoading) {
-    return null; // Or a loading screen
+    return null; // Loading screen
   }
 
   return (
@@ -69,6 +50,7 @@ export default function App() {
       <PaperProvider theme={theme}>
         <StatusBar style="auto" />
         <NavigationContainer>
+          <Portal.Host>
           <Stack.Navigator
             screenOptions={{
               headerStyle: {
@@ -80,7 +62,7 @@ export default function App() {
               },
             }}
           >
-            {!isAuthenticated ? (
+            {!user ? (
               <>
                 <Stack.Screen
                   name="PhoneEntry"
@@ -90,7 +72,7 @@ export default function App() {
                     <PhoneEntryScreen
                       {...props}
                       onOtpSent={(phone) => {
-                        handleOtpSent(phone);
+                        setAuthState({ phone });
                         props.navigation.navigate('OtpVerify', { phone });
                       }}
                     />
@@ -105,7 +87,8 @@ export default function App() {
                       {...props}
                       phone={props.route.params.phone}
                       onVerified={(authResponse) => {
-                        handleOtpVerified(authResponse);
+                        // Navigation handled by UserContext login
+                        props.navigation.navigate('Feed');
                       }}
                       onBack={() => props.navigation.goBack()}
                     />
@@ -122,7 +105,7 @@ export default function App() {
                     <FeedScreen
                       {...props}
                       onCreateActivity={() =>
-                        props.navigation.navigate('CreateActivity')
+                        props.navigation.navigate('TemplateSelection')
                       }
                       onActivityPress={(activityId) =>
                         props.navigation.navigate('ActivityDetail', {
@@ -170,12 +153,28 @@ export default function App() {
                   )}
                 </Stack.Screen>
                 <Stack.Screen
+                  name="TemplateSelection"
+                  options={{ title: 'Choose Template' }}
+                >
+                  {(props) => (
+                    <TemplateSelectionScreen
+                      onSelectTemplate={(template) => {
+                        props.navigation.navigate('CreateActivity', {
+                          template: template || undefined,
+                        });
+                      }}
+                      onCancel={() => props.navigation.goBack()}
+                    />
+                  )}
+                </Stack.Screen>
+                <Stack.Screen
                   name="CreateActivity"
                   options={{ title: 'Create Activity' }}
                 >
                   {(props) => (
                     <CreateActivityScreen
                       {...props}
+                      template={props.route.params?.template}
                       onSubmit={(activityId) => {
                         props.navigation.navigate('ActivityDetail', {
                           activityId,
@@ -185,12 +184,42 @@ export default function App() {
                     />
                   )}
                 </Stack.Screen>
+                <Stack.Screen
+                  name="ContactsUpload"
+                  options={{ title: 'Upload Contacts' }}
+                >
+                  {(props) => (
+                    <ContactsUploadScreen
+                      {...props}
+                      onComplete={() => props.navigation.goBack()}
+                      onSkip={() => props.navigation.goBack()}
+                    />
+                  )}
+                </Stack.Screen>
+                <Stack.Screen
+                  name="Settings"
+                  options={{ title: 'Settings' }}
+                >
+                  {(props) => <SettingsScreen {...props} />}
+                </Stack.Screen>
               </>
             )}
           </Stack.Navigator>
         </NavigationContainer>
+          </Portal.Host>
       </PaperProvider>
+      <Toast />
     </SafeAreaProvider>
+  );
+}
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <UserProvider>
+        <AppNavigator />
+      </UserProvider>
+    </ErrorBoundary>
   );
 }
 

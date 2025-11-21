@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView, Share, Alert } from 'react-native';
+import { View, StyleSheet, ScrollView, Share } from 'react-native';
 import { TextInput, Button, Text, Card, Surface } from 'react-native-paper';
 import * as Clipboard from 'expo-clipboard';
 import * as Sharing from 'expo-sharing';
+import Toast from 'react-native-toast-message';
 import { ActivityDetail } from '../types';
 import { activitiesApi } from '../services/api';
 
@@ -39,9 +40,17 @@ export const InviteScreen: React.FC<InviteScreenProps> = ({ activityId }) => {
   const handleCopyLink = async () => {
     try {
       await Clipboard.setStringAsync(inviteLink);
-      Alert.alert('Success', 'Invite link copied to clipboard!');
+      Toast.show({
+        type: 'success',
+        text1: 'Success',
+        text2: 'Invite link copied to clipboard!',
+      });
     } catch (error) {
-      Alert.alert('Error', 'Failed to copy link');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to copy link',
+      });
     }
   };
 
@@ -62,17 +71,29 @@ export const InviteScreen: React.FC<InviteScreenProps> = ({ activityId }) => {
 
   const handleInviteByPhone = async () => {
     if (!phone || phone.length !== 10) {
-      Alert.alert('Error', 'Please enter a valid 10-digit phone number');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Please enter a valid 10-digit phone number',
+      });
       return;
     }
 
     setLoading(true);
     try {
       await activitiesApi.invite(activityId, phone);
-      Alert.alert('Success', `Invitation sent to ${phone}`);
+      Toast.show({
+        type: 'success',
+        text1: 'Success',
+        text2: `Invitation sent to ${phone}`,
+      });
       setPhone('');
     } catch (error) {
-      Alert.alert('Error', 'Failed to send invitation');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to send invitation',
+      });
     } finally {
       setLoading(false);
     }

@@ -1,12 +1,16 @@
 package com.gathr.service.impl;
 
 import com.gathr.service.OtpService;
+import com.twilio.Twilio;
+import com.twilio.rest.api.v2010.account.Message;
+import com.twilio.type.PhoneNumber;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
+import jakarta.annotation.PostConstruct;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -40,6 +44,16 @@ public class TwilioOtpServiceImpl implements OtpService {
     // In-memory storage for OTPs (use Redis in production)
     private final Map<String, OtpEntry> otpStorage = new ConcurrentHashMap<>();
 
+    @PostConstruct
+    public void init() {
+        if (!accountSid.isEmpty() && !authToken.isEmpty()) {
+            Twilio.init(accountSid, authToken);
+            logger.info("Twilio initialized with phone number: {}", fromPhoneNumber);
+        } else {
+            logger.error("Twilio credentials not configured! Set twilio.account-sid and twilio.auth-token");
+        }
+    }
+
     @Override
     public String sendOtp(String phone) {
         // Generate 6-digit OTP
@@ -49,21 +63,15 @@ public class TwilioOtpServiceImpl implements OtpService {
         otpStorage.put(phone, new OtpEntry(otp, expiryTime));
 
         try {
-            // TODO: Uncomment when Twilio SDK is added
-            /*
-            Twilio.init(accountSid, authToken);
             Message message = Message.creator(
                     new PhoneNumber(phone),
                     new PhoneNumber(fromPhoneNumber),
-                    "Your gathr verification code is: " + otp
+                    "Your Gathr verification code is: " + otp + "\n\nThis code will expire in " + OTP_EXPIRY_MINUTES + " minutes."
             ).create();
 
             logger.info("OTP sent via Twilio to {}: {}", phone, message.getSid());
-            */
-
-            logger.info("OTP would be sent to {}: {} (Twilio SDK not configured)", phone, otp);
         } catch (Exception e) {
-            logger.error("Failed to send OTP via Twilio: {}", e.getMessage(), e);
+            logger.error("Failed to send OTP via Twilio to {}: {}", phone, e.getMessage(), e);
             throw new RuntimeException("Failed to send OTP", e);
         }
 

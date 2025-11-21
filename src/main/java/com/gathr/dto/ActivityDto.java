@@ -23,5 +23,10 @@ public class ActivityDto {
     private Integer interestedCount;
     private Integer confirmedCount;
     private Integer totalParticipants;
+    private Integer peopleCount; // Alias for totalParticipants
+    private Integer mutualsCount; // Will be calculated per user
+    private Boolean isInviteOnly;
+    private Boolean revealIdentities;
+    private Integer maxMembers;
 }
 

@@ -95,14 +95,44 @@ export const ActivityCard: React.FC<ActivityCardProps> = ({
         </View>
 
         {onJoin && (
-          <Button
-            mode="contained"
-            onPress={onJoin}
-            style={styles.joinButton}
-            disabled={activity.isInviteOnly}
-          >
-            {activity.isInviteOnly ? 'Request Invite' : 'Join'}
-          </Button>
+          <>
+            {activity.isInviteOnly ? (
+              <Button
+                mode="outlined"
+                onPress={onJoin}
+                style={styles.joinButton}
+                icon="lock"
+              >
+                Request Invite
+              </Button>
+            ) : (
+              <Button
+                mode="contained"
+                onPress={onJoin}
+                style={styles.joinButton}
+                disabled={
+                  activity.maxMembers !== undefined &&
+                  (activity.peopleCount || 0) >= activity.maxMembers
+                }
+              >
+                {activity.maxMembers !== undefined &&
+                (activity.peopleCount || 0) >= activity.maxMembers
+                  ? 'Full'
+                  : 'Join'}
+              </Button>
+            )}
+            {activity.maxMembers !== undefined &&
+              (activity.peopleCount || 0) >= activity.maxMembers && (
+                <Text variant="bodySmall" style={styles.fullText}>
+                  This activity has reached maximum participants ({activity.maxMembers})
+                </Text>
+              )}
+            {activity.isInviteOnly && (
+              <Text variant="bodySmall" style={styles.inviteText}>
+                This is an invite-only activity
+              </Text>
+            )}
+          </>
         )}
       </Card.Content>
     </Card>
@@ -158,6 +188,17 @@ const styles = StyleSheet.create({
   },
   joinButton: {
     marginTop: 8,
+  },
+  fullText: {
+    color: '#B00020',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  inviteText: {
+    color: '#666',
+    marginTop: 4,
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
 });
 

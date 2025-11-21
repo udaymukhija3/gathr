@@ -22,12 +22,12 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
     /**
      * Find all reports by status
      */
-    List<Report> findByStatus(Report.ReportStatus status);
+    List<Report> findByStatus(String status);
 
     /**
      * Find pending reports (for moderation queue)
      */
-    List<Report> findByStatusOrderByCreatedAtDesc(Report.ReportStatus status);
+    List<Report> findByStatusOrderByCreatedAtDesc(String status);
 
     /**
      * Find all reports submitted by a user
@@ -47,7 +47,7 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
     /**
      * Count reports against a user by status
      */
-    long countByTargetUserAndStatus(User targetUser, Report.ReportStatus status);
+    long countByTargetUserAndStatus(User targetUser, String status);
 
     /**
      * Count recent reports against a user (within time window)
@@ -75,27 +75,23 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
     boolean existsByReporterAndTargetUser(User reporter, User targetUser);
 
     /**
-     * Find unreviewed reports (PENDING or UNDER_REVIEW) ordered by creation date
+     * Find unreviewed reports (OPEN status) ordered by creation date
      */
     @Query("SELECT r FROM Report r " +
-           "WHERE r.status IN ('PENDING', 'UNDER_REVIEW') " +
+           "WHERE r.status = 'OPEN' " +
            "ORDER BY r.createdAt ASC")
     List<Report> findUnreviewedReports();
 
-    /**
-     * Find reports reviewed by a specific admin
-     */
-    List<Report> findByReviewedBy(User admin);
 
     /**
      * Count total pending reports (for admin dashboard)
      */
-    long countByStatus(Report.ReportStatus status);
+    long countByStatus(String status);
 
     /**
      * Find reports by reason
      */
-    List<Report> findByReason(Report.ReportReason reason);
+    List<Report> findByReason(String reason);
 
     /**
      * Find reports created within a date range

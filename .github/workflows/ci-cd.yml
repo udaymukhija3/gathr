@@ -1,0 +1,306 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  JAVA_VERSION: '17'
+  NODE_VERSION: '18'
+  DOCKER_REGISTRY: ghcr.io
+  DOCKER_IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Backend Build and Test
+  backend-test:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: gathr_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Run backend tests
+        run: mvn clean test -B
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: gathr_test
+          DB_USERNAME: postgres
+          DB_PASSWORD: postgres
+          JWT_SECRET: test-secret-key-for-ci-min-256-bits-long
+
+      - name: Build backend JAR
+        run: mvn clean package -DskipTests -B
+
+      - name: Upload backend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-jar
+          path: target/*.jar
+          retention-days: 7
+
+  # Frontend Build and Test
+  frontend-test:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run frontend tests
+        working-directory: frontend
+        run: npm run test:ci
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage
+          retention-days: 7
+
+  # Code Quality Checks
+  code-quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    needs: [backend-test, frontend-test]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Run backend checkstyle (if configured)
+        run: echo "Checkstyle would run here"
+        continue-on-error: true
+
+      - name: Run backend SpotBugs (if configured)
+        run: echo "SpotBugs would run here"
+        continue-on-error: true
+
+  # Build Docker Images
+  docker-build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: [backend-test, frontend-test]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Download backend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-jar
+          path: target
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Deploy to Staging (example - customize for your infrastructure)
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [docker-build]
+    if: github.ref == 'refs/heads/develop'
+    environment:
+      name: staging
+      url: https://staging-api.gathr.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to staging
+        run: |
+          echo "Deployment to staging would happen here"
+          echo "Examples:"
+          echo "  - kubectl set image deployment/gathr-backend ..."
+          echo "  - helm upgrade gathr ./charts/gathr ..."
+          echo "  - aws ecs update-service ..."
+          echo "  - fly deploy --config fly.staging.toml"
+
+  # Deploy to Production (example - requires manual approval)
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [docker-build]
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: https://api.gathr.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to production
+        run: |
+          echo "Deployment to production would happen here"
+          echo "Same commands as staging but with production config"
+          echo "GitHub Environment protection rules should require manual approval"
+
+  # Database Migration Check
+  migration-check:
+    name: Migration Check
+    runs-on: ubuntu-latest
+    needs: [backend-test]
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: gathr_migration_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Run Flyway migrations
+        run: |
+          mvn flyway:migrate \
+            -Dflyway.url=jdbc:postgresql://localhost:5432/gathr_migration_test \
+            -Dflyway.user=postgres \
+            -Dflyway.password=postgres
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: gathr_migration_test
+          DB_USERNAME: postgres
+          DB_PASSWORD: postgres
+
+      - name: Verify migration success
+        run: |
+          mvn flyway:info \
+            -Dflyway.url=jdbc:postgresql://localhost:5432/gathr_migration_test \
+            -Dflyway.user=postgres \
+            -Dflyway.password=postgres
+
+  # Security Scanning
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: [backend-test]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  # Notification (optional)
+  notify:
+    name: Notify on Failure
+    runs-on: ubuntu-latest
+    needs: [backend-test, frontend-test, code-quality, migration-check]
+    if: failure()
+
+    steps:
+      - name: Send notification
+        run: |
+          echo "CI/CD pipeline failed!"
+          echo "In production, this would send notifications to:"
+          echo "  - Slack webhook"
+          echo "  - Email"
+          echo "  - PagerDuty"
+          echo "  - etc."

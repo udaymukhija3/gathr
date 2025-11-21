@@ -1,8 +1,45 @@
+# Maven build artifacts
 target/
-.git/
-.gitignore
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+dependency-reduced-pom.xml
+
+# IDE files
 .idea/
 *.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+# Version control
+.git/
+.gitignore
+.gitattributes
+
+# CI/CD
+.github/
+*.md
+docs/
+
+# Frontend (backend build only)
+frontend/
+node_modules/
+
+# Environment & secrets
+.env
+.env.*
+*.properties.local
+
+# OS files
 .DS_Store
+Thumbs.db
+
+# Logs
 *.log
+logs/
+
+# Test files (not needed in production)
+src/test/
 

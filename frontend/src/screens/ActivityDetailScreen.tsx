@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, StyleSheet, ScrollView } from 'react-native';
 import { Text, Button, ActivityIndicator, Card, Chip } from 'react-native-paper';
 import { format, parseISO } from 'date-fns';
+import Toast from 'react-native-toast-message';
 import { ActivityDetail } from '../types';
 import { activitiesApi } from '../services/api';
 import { AvatarAnon } from '../components/AvatarAnon';
 import { MutualBadge } from '../components/MutualBadge';
+import { InviteModal } from '../components/InviteModal';
+import { trackActivity } from '../utils/telemetry';
 
 interface ActivityDetailScreenProps {
   activityId: number;
@@ -21,6 +24,7 @@ export const ActivityDetailScreen: React.FC<ActivityDetailScreenProps> = ({
   const [activity, setActivity] = useState<ActivityDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
 
   useEffect(() => {
     loadActivity();
@@ -31,22 +35,85 @@ export const ActivityDetailScreen: React.FC<ActivityDetailScreenProps> = ({
       setLoading(true);
       const data = await activitiesApi.getById(activityId);
       setActivity(data);
+
+      // Track activity detail viewed
+      trackActivity.viewed(activityId, {
+        participantCount: data.participants.length,
+        isInviteOnly: data.isInviteOnly,
+        mutualsCount: data.mutualsCount,
+      });
     } catch (error) {
       console.error('Error loading activity:', error);
-      Alert.alert('Error', 'Failed to load activity details');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to load activity details',
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleJoin = async () => {
+  const handleJoin = async (inviteToken?: string) => {
+    // Check if invite-only and no token provided
+    if (activity?.isInviteOnly && !inviteToken) {
+      trackActivity.inviteModalOpened(activityId, { source: 'detail' });
+      setShowInviteModal(true);
+      return;
+    }
+
+    // Check max members
+    if (activity?.maxMembers && (activity.peopleCount || 0) >= activity.maxMembers) {
+      trackActivity.full(activityId, {
+        maxMembers: activity.maxMembers,
+        currentCount: activity.peopleCount,
+      });
+      Toast.show({
+        type: 'error',
+        text1: 'Activity Full',
+        text2: `This activity has reached maximum participants (${activity.maxMembers})`,
+      });
+      return;
+    }
+
     try {
       setJoining(true);
-      await activitiesApi.join(activityId, 'INTERESTED');
-      Alert.alert('Success', 'You\'re interested in this activity!');
+      await activitiesApi.join(activityId, 'INTERESTED', inviteToken);
+      trackActivity.joined(activityId, 'INTERESTED', {
+        source: 'detail',
+        usedInviteToken: !!inviteToken,
+      });
+      Toast.show({
+        type: 'success',
+        text1: 'Success',
+        text2: 'You\'re interested in this activity!',
+      });
       await loadActivity();
-    } catch (error) {
-      Alert.alert('Error', 'Failed to join activity');
+      setShowInviteModal(false);
+    } catch (error: any) {
+      const errorMessage = error.message || 'Failed to join activity';
+      if (errorMessage.includes('403') || errorMessage.includes('Forbidden')) {
+        trackActivity.inviteModalOpened(activityId, { source: 'detail', reason: 'forbidden' });
+        Toast.show({
+          type: 'error',
+          text1: 'Invite Required',
+          text2: 'This is an invite-only activity. Please enter a valid invite token.',
+        });
+        setShowInviteModal(true);
+      } else if (errorMessage.includes('409') || errorMessage.includes('Conflict')) {
+        trackActivity.full(activityId, { error: 'conflict' });
+        Toast.show({
+          type: 'error',
+          text1: 'Activity Full',
+          text2: 'This activity has reached maximum participants',
+        });
+      } else {
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: errorMessage,
+        });
+      }
     } finally {
       setJoining(false);
     }
@@ -172,7 +239,10 @@ export const ActivityDetailScreen: React.FC<ActivityDetailScreenProps> = ({
         {canJoinChat() && (
           <Button
             mode="contained"
-            onPress={onJoinChat}
+            onPress={() => {
+              trackActivity.chatJoined(activityId, { source: 'detail' });
+              onJoinChat();
+            }}
             style={styles.button}
             buttonColor="#4CAF50"
           >
@@ -180,10 +250,24 @@ export const ActivityDetailScreen: React.FC<ActivityDetailScreenProps> = ({
           </Button>
         )}
 
-        <Button mode="outlined" onPress={onInvite} style={styles.button}>
+        <Button
+          mode="outlined"
+          onPress={() => {
+            trackActivity.inviteModalOpened(activityId, { source: 'detail_invite_button' });
+            onInvite();
+          }}
+          style={styles.button}
+        >
           Invite Friends
         </Button>
       </View>
+
+      <InviteModal
+        visible={showInviteModal}
+        activityId={activityId}
+        onClose={() => setShowInviteModal(false)}
+        onTokenEntered={(token) => handleJoin(token)}
+      />
     </ScrollView>
   );
 };

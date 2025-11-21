@@ -1,0 +1,125 @@
+{
+  "hubs": [
+    {
+      "id": 1,
+      "name": "Cyberhub",
+      "area": "Cyber City",
+      "description": "A bustling hub with restaurants, cafes, and entertainment venues"
+    },
+    {
+      "id": 2,
+      "name": "Galleria",
+      "area": "DLF Galleria",
+      "description": "Shopping and dining destination in the heart of Gurgaon"
+    },
+    {
+      "id": 3,
+      "name": "32nd Avenue",
+      "area": "Sector 32",
+      "description": "Popular food and nightlife street"
+    }
+  ],
+  "activities": [
+    {
+      "id": 1,
+      "title": "Coffee at Galleria",
+      "hubId": 2,
+      "hubName": "Galleria",
+      "category": "FOOD",
+      "startTime": "2024-12-31T18:30:00+05:30",
+      "endTime": "2024-12-31T20:00:00+05:30",
+      "createdBy": 1,
+      "createdByName": "Test User",
+      "peopleCount": 7,
+      "mutualsCount": 2,
+      "isInviteOnly": true,
+      "revealIdentities": false,
+      "maxMembers": 8
+    },
+    {
+      "id": 2,
+      "title": "Pickleball Session",
+      "hubId": 1,
+      "hubName": "Cyberhub",
+      "category": "SPORTS",
+      "startTime": "2024-12-31T19:00:00+05:30",
+      "endTime": "2024-12-31T21:00:00+05:30",
+      "createdBy": 1,
+      "createdByName": "Test User",
+      "peopleCount": 5,
+      "mutualsCount": 1,
+      "isInviteOnly": false,
+      "revealIdentities": true,
+      "maxMembers": 6
+    },
+    {
+      "id": 3,
+      "title": "Pottery Workshop",
+      "hubId": 3,
+      "hubName": "32nd Avenue",
+      "category": "ART",
+      "startTime": "2024-12-31T18:00:00+05:30",
+      "endTime": "2024-12-31T19:30:00+05:30",
+      "createdBy": 1,
+      "createdByName": "Test User",
+      "peopleCount": 6,
+      "mutualsCount": 3,
+      "isInviteOnly": true,
+      "revealIdentities": false,
+      "maxMembers": 8
+    },
+    {
+      "id": 4,
+      "title": "Badminton Night",
+      "hubId": 1,
+      "hubName": "Cyberhub",
+      "category": "SPORTS",
+      "startTime": "2024-12-31T20:00:00+05:30",
+      "endTime": "2024-12-31T21:30:00+05:30",
+      "createdBy": 1,
+      "createdByName": "Test User",
+      "peopleCount": 4,
+      "mutualsCount": 0,
+      "isInviteOnly": false,
+      "revealIdentities": false,
+      "maxMembers": 4
+    },
+    {
+      "id": 5,
+      "title": "Street Cricket",
+      "hubId": 1,
+      "hubName": "Cyberhub",
+      "category": "SPORTS",
+      "startTime": "2024-12-31T21:00:00+05:30",
+      "endTime": "2024-12-31T22:30:00+05:30",
+      "createdBy": 1,
+      "createdByName": "Test User",
+      "peopleCount": 9,
+      "mutualsCount": 4,
+      "isInviteOnly": false,
+      "revealIdentities": true,
+      "maxMembers": 12
+    }
+  ],
+  "messages": {
+    "1": [
+      {
+        "id": 1,
+        "activityId": 1,
+        "userId": 1,
+        "userName": "User #23",
+        "text": "Hey! Looking forward to this!",
+        "createdAt": "2024-12-31T18:00:00+05:30"
+      },
+      {
+        "id": 2,
+        "activityId": 1,
+        "userId": 2,
+        "userName": "User #45",
+        "text": "Same here! See you there.",
+        "createdAt": "2024-12-31T18:05:00+05:30"
+      }
+    ]
+  }
+}
+

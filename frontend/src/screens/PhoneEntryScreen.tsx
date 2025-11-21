@@ -1,33 +1,67 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { TextInput, Button, Text, Surface } from 'react-native-paper';
-import { authApi } from '../services/api';
+import Toast from 'react-native-toast-message';
+import { useApi } from '../hooks/useApi';
+import { trackAuth } from '../utils/telemetry';
 
 interface PhoneEntryScreenProps {
   onOtpSent: (phone: string) => void;
+  navigation?: any;
 }
 
-export const PhoneEntryScreen: React.FC<PhoneEntryScreenProps> = ({ onOtpSent }) => {
+export const PhoneEntryScreen: React.FC<PhoneEntryScreenProps> = ({ onOtpSent, navigation }) => {
   const [phone, setPhone] = useState('');
-  const [loading, setLoading] = useState(false);
+  const { request, loading } = useApi();
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    trackAuth.phoneEntryViewed();
+  }, []);
+
   const handleSubmit = async () => {
-    if (!phone || phone.length !== 10) {
-      setError('Please enter a valid 10-digit phone number');
+    if (!phone || phone.length < 10) {
+      setError('Please enter a valid phone number');
       return;
     }
 
-    setLoading(true);
     setError('');
 
     try {
-      await authApi.startOtp(phone);
+      await request({
+        method: 'POST',
+        url: '/auth/otp/start',
+        data: { phone },
+      });
+
+      trackAuth.otpRequested(phone);
+
+      Toast.show({
+        type: 'success',
+        text1: 'OTP Sent',
+        text2: 'Check your phone for the verification code',
+      });
+
       onOtpSent(phone);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to send OTP');
-    } finally {
-      setLoading(false);
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to send OTP';
+      setError(errorMessage);
+
+      trackAuth.otpRequestFailed(phone, errorMessage);
+
+      if (errorMessage.includes('429') || errorMessage.includes('Too many requests')) {
+        Toast.show({
+          type: 'error',
+          text1: 'Rate Limit Exceeded',
+          text2: 'Please wait before requesting another OTP',
+        });
+      } else {
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: errorMessage,
+        });
+      }
     }
   };
 

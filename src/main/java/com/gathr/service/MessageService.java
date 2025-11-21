@@ -11,7 +11,9 @@ import com.gathr.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -20,13 +22,16 @@ public class MessageService {
     private final MessageRepository messageRepository;
     private final ActivityRepository activityRepository;
     private final UserRepository userRepository;
+    private final EventLogService eventLogService;
     
     public MessageService(MessageRepository messageRepository,
                          ActivityRepository activityRepository,
-                         UserRepository userRepository) {
+                         UserRepository userRepository,
+                         EventLogService eventLogService) {
         this.messageRepository = messageRepository;
         this.activityRepository = activityRepository;
         this.userRepository = userRepository;
+        this.eventLogService = eventLogService;
     }
     
     @Transactional(readOnly = true)
@@ -51,6 +56,13 @@ public class MessageService {
         message.setText(request.getText());
         
         message = messageRepository.save(message);
+
+        // Log event
+        Map<String, Object> eventProps = new HashMap<>();
+        eventProps.put("messageId", message.getId());
+        eventProps.put("textLength", message.getText().length());
+        eventLogService.log(userId, activityId, "message_sent", eventProps);
+
         return convertToDto(message);
     }
     
