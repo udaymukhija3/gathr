@@ -1,5 +1,6 @@
 package com.gathr.controller;
 
+import com.gathr.security.AuthenticatedUserService;
 import com.gathr.service.EventLogService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -12,9 +13,11 @@ import java.util.Map;
 public class EventController {
 
     private final EventLogService eventLogService;
+    private final AuthenticatedUserService authenticatedUserService;
 
-    public EventController(EventLogService eventLogService) {
+    public EventController(EventLogService eventLogService, AuthenticatedUserService authenticatedUserService) {
         this.eventLogService = eventLogService;
+        this.authenticatedUserService = authenticatedUserService;
     }
 
     @PostMapping
@@ -22,7 +25,7 @@ public class EventController {
             @RequestBody EventRequest request,
             Authentication authentication) {
 
-        Long userId = authentication != null ? (Long) authentication.getPrincipal() : null;
+        Long userId = authenticatedUserService.extractUserId(authentication).orElse(null);
 
         try {
             if (request.activityId != null) {

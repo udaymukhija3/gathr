@@ -2,6 +2,7 @@ package com.gathr.controller;
 
 import com.gathr.dto.ActivityTemplateDto;
 import com.gathr.dto.CreateTemplateRequest;
+import com.gathr.security.AuthenticatedUserService;
 import com.gathr.service.ActivityTemplateService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -15,16 +16,18 @@ import java.util.List;
 public class ActivityTemplateController {
 
     private final ActivityTemplateService templateService;
+    private final AuthenticatedUserService authenticatedUserService;
 
-    public ActivityTemplateController(ActivityTemplateService templateService) {
+    public ActivityTemplateController(ActivityTemplateService templateService, AuthenticatedUserService authenticatedUserService) {
         this.templateService = templateService;
+        this.authenticatedUserService = authenticatedUserService;
     }
 
     @GetMapping
     public ResponseEntity<List<ActivityTemplateDto>> getTemplates(
             @RequestParam(required = false, defaultValue = "all") String type,
             Authentication authentication) {
-        Long userId = (Long) authentication.getPrincipal();
+        Long userId = authenticatedUserService.requireUserId(authentication);
 
         List<ActivityTemplateDto> templates;
         switch (type) {
@@ -47,7 +50,7 @@ public class ActivityTemplateController {
     public ResponseEntity<ActivityTemplateDto> createTemplate(
             @Valid @RequestBody CreateTemplateRequest request,
             Authentication authentication) {
-        Long userId = (Long) authentication.getPrincipal();
+        Long userId = authenticatedUserService.requireUserId(authentication);
         ActivityTemplateDto template = templateService.createTemplate(request, userId);
         return ResponseEntity.ok(template);
     }
@@ -56,7 +59,7 @@ public class ActivityTemplateController {
     public ResponseEntity<MessageResponse> deleteTemplate(
             @PathVariable Long id,
             Authentication authentication) {
-        Long userId = (Long) authentication.getPrincipal();
+        Long userId = authenticatedUserService.requireUserId(authentication);
         templateService.deleteTemplate(id, userId);
         return ResponseEntity.ok(new MessageResponse("Template deleted successfully"));
     }

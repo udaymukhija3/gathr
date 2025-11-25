@@ -13,7 +13,6 @@ public class CreateActivityRequest {
     @NotBlank(message = "Title is required")
     private String title;
     
-    @NotNull(message = "Hub ID is required")
     private Long hubId;
     
     @NotNull(message = "Category is required")
@@ -27,5 +26,20 @@ public class CreateActivityRequest {
     
     private Boolean isInviteOnly;
     private Integer maxMembers;
+
+    private String placeId;
+    private String placeName;
+    private String placeAddress;
+    private Double latitude;
+    private Double longitude;
+
+    public boolean hasCustomLocation() {
+        return hubId == null;
+    }
+
+    public boolean hasValidCustomLocation() {
+        return placeName != null && !placeName.isBlank()
+                && latitude != null && longitude != null;
+    }
 }
 

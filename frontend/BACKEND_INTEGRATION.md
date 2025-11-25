@@ -98,6 +98,30 @@ This document lists all backend endpoints and their expected JSON schemas that t
 ]
 ```
 
+#### GET /activities?latitude=28.45&longitude=77.03&radiusKm=5
+**Response (200):**
+```json
+[
+  {
+    "id": 42,
+    "title": "Pickleball at Ridgewood",
+    "locationName": "Ridgewood Courts",
+    "locationAddress": "Sec 27, Gurugram",
+    "latitude": 28.4471,
+    "longitude": 77.0321,
+    "distanceKm": 1.2,
+    "category": "SPORTS",
+    "startTime": "2024-12-31T18:30:00+05:30",
+    "endTime": "2024-12-31T20:00:00+05:30",
+    "createdBy": 7,
+    "createdByName": "Creator",
+    "peopleCount": 4,
+    "isInviteOnly": false,
+    "maxMembers": 8
+  }
+]
+```
+
 #### GET /activities/:id
 **Response (200):**
 ```json
@@ -136,7 +160,7 @@ This document lists all backend endpoints and their expected JSON schemas that t
 ```
 
 #### POST /activities
-**Request:**
+**Request (curated hub):**
 ```json
 {
   "title": "Coffee Tonight",
@@ -146,6 +170,23 @@ This document lists all backend endpoints and their expected JSON schemas that t
   "endTime": "2024-12-31T20:00:00+05:30",
   "isInviteOnly": false,
   "maxMembers": 4
+}
+```
+
+**Request (custom location):**
+```json
+{
+  "title": "Pickleball at Ridgewood",
+  "category": "SPORTS",
+  "startTime": "2024-12-31T18:00:00+05:30",
+  "endTime": "2024-12-31T20:00:00+05:30",
+  "placeName": "Ridgewood Courts",
+  "placeAddress": "Sec 27, Gurugram",
+  "latitude": 28.4471,
+  "longitude": 77.0321,
+  "placeId": "mapbox.123",
+  "isInviteOnly": false,
+  "maxMembers": 8
 }
 ```
 

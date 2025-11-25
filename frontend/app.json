@@ -21,9 +21,20 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#6200EE"
       },
-      "package": "com.gatherly.app"
+      "package": "com.gatherly.app",
+      "versionCode": 1,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "CAMERA"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyDEXAMPLE_REPLACE_WITH_YOUR_ACTUAL_KEY"
+        }
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"

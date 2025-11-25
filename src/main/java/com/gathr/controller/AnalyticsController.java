@@ -2,6 +2,7 @@ package com.gathr.controller;
 
 import com.gathr.entity.Event;
 import com.gathr.repository.EventRepository;
+import com.gathr.security.AuthenticatedUserService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -18,9 +19,11 @@ import java.util.stream.Collectors;
 public class AnalyticsController {
 
     private final EventRepository eventRepository;
+    private final AuthenticatedUserService authenticatedUserService;
 
-    public AnalyticsController(EventRepository eventRepository) {
+    public AnalyticsController(EventRepository eventRepository, AuthenticatedUserService authenticatedUserService) {
         this.eventRepository = eventRepository;
+        this.authenticatedUserService = authenticatedUserService;
     }
 
     @GetMapping("/events")
@@ -31,7 +34,7 @@ public class AnalyticsController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime since,
             Authentication authentication) {
 
-        Long authenticatedUserId = (Long) authentication.getPrincipal();
+        Long authenticatedUserId = authenticatedUserService.requireUserId(authentication);
 
         List<Event> events;
 

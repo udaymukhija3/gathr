@@ -2,6 +2,7 @@ package com.gathr.controller;
 
 import com.gathr.dto.CreateReportRequest;
 import com.gathr.entity.Report;
+import com.gathr.security.AuthenticatedUserService;
 import com.gathr.service.ReportService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -13,16 +14,18 @@ import org.springframework.web.bind.annotation.*;
 public class ReportController {
 
     private final ReportService reportService;
+    private final AuthenticatedUserService authenticatedUserService;
 
-    public ReportController(ReportService reportService) {
+    public ReportController(ReportService reportService, AuthenticatedUserService authenticatedUserService) {
         this.reportService = reportService;
+        this.authenticatedUserService = authenticatedUserService;
     }
 
     @PostMapping
     public ResponseEntity<?> createReport(
             @Valid @RequestBody CreateReportRequest request,
             Authentication authentication) {
-        Long reporterId = (Long) authentication.getPrincipal();
+        Long reporterId = authenticatedUserService.requireUserId(authentication);
         
         Report report = reportService.createReport(
                 reporterId,

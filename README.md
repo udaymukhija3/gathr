@@ -1,6 +1,6 @@
 # gathr Backend
 
-Backend API for gathr - small group hangouts around activities in Gurgaon.
+Backend API for gathr - small group hangouts around local activities.
 
 ## Tech Stack
 

@@ -1,6 +1,6 @@
 # Gatherly Mobile App
 
-React Native + Expo frontend for Gatherly - small group hangouts around activities in Gurgaon.
+React Native + Expo frontend for Gatherly - small group hangouts around local activities.
 
 ## Tech Stack
 
@@ -166,6 +166,13 @@ frontend/
 └── README.md
 ```
 
+## Location & Nearby Discovery
+
+- Creators can either choose from curated hubs or switch to **Pick any place** to search real venues (Mapbox Places) or type coordinates manually.
+- Setting `EXPO_PUBLIC_MAPBOX_TOKEN` enables autocomplete + address suggestions in the create flow.
+- The feed now supports a **Near Me** mode that requests location permission, lets users pick a radius (5/10/25 km), and surfaces events based on coordinates returned from the API.
+- Backend requests now send either `hubId` or `{ placeName, latitude, longitude, address }` so radius searches can work consistently.
+
 ## API Endpoints (Backend Integration)
 
 The frontend expects these backend endpoints:
@@ -180,14 +187,16 @@ The frontend expects these backend endpoints:
   - Returns: `{ token: string, user: User }`
 
 ### Activities
-- `GET /activities?hub_id=<id>&date=<YYYY-MM-DD>` - Get activities
-  - Returns: `Activity[]` with `peopleCount`, `mutualsCount`, `isInviteOnly`, `revealIdentities`, `maxMembers`
+- `GET /activities?hub_id=<id>&date=<YYYY-MM-DD>` - Get activities for a hub
+- `GET /activities?latitude=<lat>&longitude=<lng>&radiusKm=<km>` - Get activities near a coordinate
+  - Returns: `Activity[]` with `peopleCount`, `mutualsCount`, `isInviteOnly`, `revealIdentities`, `maxMembers`, `locationName`, `locationAddress`, `distanceKm`
 
 - `GET /activities/:id` - Get activity details
   - Returns: `ActivityDetail` with `participants[]` (anon if `revealIdentities=false`)
 
 - `POST /activities` - Create activity
-  - Body: `{ title, hubId, category, startTime, endTime, isInviteOnly?, maxMembers? }`
+  - Body: Either `{ title, hubId, category, startTime, endTime, isInviteOnly?, maxMembers? }` **or**
+    `{ title, category, startTime, endTime, placeName, latitude, longitude, placeAddress?, isInviteOnly?, maxMembers? }`
 
 - `POST /activities/:id/join?status=INTERESTED|CONFIRMED&inviteToken=<token>` - Join activity
   - Returns: `409 Conflict` if max members reached
@@ -269,6 +278,7 @@ Tests cover:
 | `EXPO_PUBLIC_API_URL` | Backend API base URL | `http://localhost:8080` | Set to production API URL |
 | `EXPO_PUBLIC_WS_URL` | WebSocket base URL | `ws://localhost:8080` | Set to production WS URL |
 | `EXPO_PUBLIC_MOCK_MODE` | Use mock data (dev only) | `false` | **Do not set** (defaults to false) |
+| `EXPO_PUBLIC_MAPBOX_TOKEN` | Mapbox Places API token for location search | _unset_ | Required to enable map/location search when creating activities |
 
 ## Troubleshooting
 

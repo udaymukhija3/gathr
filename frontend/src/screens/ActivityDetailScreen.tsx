@@ -151,6 +151,7 @@ export const ActivityDetailScreen: React.FC<ActivityDetailScreenProps> = ({
   const startTime = parseISO(activity.startTime);
   const endTime = parseISO(activity.endTime);
   const timeRange = `${format(startTime, 'MMM d, h:mm a')} - ${format(endTime, 'h:mm a')}`;
+  const locationName = activity.locationName || activity.hubName;
 
   return (
     <ScrollView style={styles.container}>
@@ -169,9 +170,16 @@ export const ActivityDetailScreen: React.FC<ActivityDetailScreenProps> = ({
 
           <Chip style={styles.categoryChip}>{activity.category}</Chip>
 
-          <Text variant="bodyMedium" style={styles.hub}>
-            📍 {activity.hubName}
-          </Text>
+          {locationName && (
+            <Text variant="bodyMedium" style={styles.hub}>
+              📍 {locationName}
+            </Text>
+          )}
+          {activity.locationAddress && (
+            <Text variant="bodySmall" style={styles.address}>
+              {activity.locationAddress}
+            </Text>
+          )}
 
           <Text variant="bodyMedium" style={styles.time}>
             🕐 {timeRange}
@@ -307,6 +315,10 @@ const styles = StyleSheet.create({
   hub: {
     marginTop: 8,
     marginBottom: 4,
+  },
+  address: {
+    color: '#666',
+    marginBottom: 8,
   },
   time: {
     marginBottom: 8,

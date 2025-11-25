@@ -7,6 +7,7 @@ import com.gathr.repository.InviteTokenRepository;
 import com.gathr.repository.ActivityRepository;
 import com.gathr.repository.UserRepository;
 import com.gathr.exception.ResourceNotFoundException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,6 +16,9 @@ import java.util.UUID;
 
 @Service
 public class InviteTokenService {
+
+    @Value("${invite.token-expiry-hours:48}")
+    private int tokenExpiryHours;
 
     private final InviteTokenRepository inviteTokenRepository;
     private final ActivityRepository activityRepository;
@@ -48,7 +52,7 @@ public class InviteTokenService {
         inviteToken.setActivity(activity);
         inviteToken.setToken(token);
         inviteToken.setCreatedBy(user);
-        inviteToken.setExpiresAt(LocalDateTime.now().plusHours(48));
+        inviteToken.setExpiresAt(LocalDateTime.now().plusHours(tokenExpiryHours));
         inviteToken.setUseCount(0);
         inviteToken.setRevoked(false);
 

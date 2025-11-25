@@ -10,16 +10,15 @@ import com.gathr.repository.UserRepository;
 import com.gathr.security.JwtUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
-import java.time.LocalDateTime;
-import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Service for authentication operations.
+ * Rate limiting is handled by RateLimitInterceptor at the infrastructure layer.
+ */
 @Service
 public class AuthService {
 
@@ -29,12 +28,6 @@ public class AuthService {
     private final JwtUtil jwtUtil;
     private final OtpService otpService;
 
-    // Rate limiting: max 3 requests per hour per phone
-    // In-memory storage (use Redis in production)
-    private final Map<String, OtpRequestRecord> otpRequestHistory = new ConcurrentHashMap<>();
-    private static final int MAX_REQUESTS_PER_HOUR = 3;
-    private static final int RATE_LIMIT_WINDOW_HOURS = 1;
-
     public AuthService(UserRepository userRepository, JwtUtil jwtUtil, OtpService otpService) {
         this.userRepository = userRepository;
         this.jwtUtil = jwtUtil;
@@ -43,50 +36,11 @@ public class AuthService {
 
     public void startOtp(AuthRequest request) {
         String phone = request.getPhone();
-        
-        // Rate limiting check
-        OtpRequestRecord record = otpRequestHistory.get(phone);
-        LocalDateTime now = LocalDateTime.now();
-        
-        if (record != null) {
-            // Remove old requests outside the window
-            record.removeOldRequests(now.minusHours(RATE_LIMIT_WINDOW_HOURS));
-            
-            if (record.getRequestCount() >= MAX_REQUESTS_PER_HOUR) {
-                logger.warn("Rate limit exceeded for phone: {}", phone);
-                throw new ResponseStatusException(
-                    HttpStatus.TOO_MANY_REQUESTS,
-                    "Too many OTP requests. Please try again later."
-                );
-            }
-            
-            record.addRequest(now);
-        } else {
-            record = new OtpRequestRecord();
-            record.addRequest(now);
-            otpRequestHistory.put(phone, record);
-        }
 
         // Send OTP via configured OtpService (mock or Twilio)
+        // Rate limiting is handled by RateLimitInterceptor
         String otp = otpService.sendOtp(phone);
         logger.info("OTP sent to {}", phone);
-    }
-
-    // Helper class for rate limiting
-    private static class OtpRequestRecord {
-        private final java.util.List<LocalDateTime> requests = new java.util.ArrayList<>();
-
-        public void addRequest(LocalDateTime timestamp) {
-            requests.add(timestamp);
-        }
-
-        public void removeOldRequests(LocalDateTime threshold) {
-            requests.removeIf(timestamp -> timestamp.isBefore(threshold));
-        }
-
-        public int getRequestCount() {
-            return requests.size();
-        }
     }
 
     @Transactional

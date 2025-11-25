@@ -15,6 +15,13 @@ public class ActivityDto {
     private String title;
     private Long hubId;
     private String hubName;
+    private String locationName;
+    private String locationAddress;
+    private String placeId;
+    private Double latitude;
+    private Double longitude;
+    private Boolean isUserLocation;
+    private Double distanceKm;
     private Activity.ActivityCategory category;
     private LocalDateTime startTime;
     private LocalDateTime endTime;

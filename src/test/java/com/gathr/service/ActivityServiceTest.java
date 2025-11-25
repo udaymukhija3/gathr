@@ -44,6 +44,12 @@ class ActivityServiceTest {
     @Mock
     private ParticipationRepository participationRepository;
 
+    @Mock
+    private InviteTokenService inviteTokenService;
+
+    @Mock
+    private EventLogService eventLogService;
+
     @InjectMocks
     private ActivityService activityService;
 
@@ -189,9 +195,13 @@ class ActivityServiceTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
         when(participationRepository.findByUserIdAndActivityId(userId, activityId))
             .thenReturn(Optional.empty());
+        when(participationRepository.countByActivityIdAndStatusIn(eq(activityId), any()))
+            .thenReturn(0);
+        when(participationRepository.countByActivityIdAndStatus(eq(activityId), any()))
+            .thenReturn(0);
 
         // When
-        activityService.joinActivity(activityId, userId, status);
+        activityService.joinActivity(activityId, userId, status, null);
 
         // Then
         verify(activityRepository).findById(activityId);
@@ -217,13 +227,68 @@ class ActivityServiceTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
         when(participationRepository.findByUserIdAndActivityId(userId, activityId))
             .thenReturn(Optional.of(existingParticipation));
+        when(participationRepository.countByActivityIdAndStatusIn(eq(activityId), any()))
+            .thenReturn(1);
+        when(participationRepository.countByActivityIdAndStatus(eq(activityId), any()))
+            .thenReturn(1);
 
         // When
-        activityService.joinActivity(activityId, userId, newStatus);
+        activityService.joinActivity(activityId, userId, newStatus, null);
 
         // Then
         assertThat(existingParticipation.getStatus()).isEqualTo(newStatus);
         verify(participationRepository).save(existingParticipation);
+    }
+
+    @Test
+    void joinActivity_WithThreeConfirmed_ShouldRevealIdentities() {
+        // Given
+        Long activityId = 1L;
+        Long userId = 1L;
+        testActivity.setRevealIdentities(false);
+
+        when(activityRepository.findById(activityId)).thenReturn(Optional.of(testActivity));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
+        when(participationRepository.findByUserIdAndActivityId(userId, activityId))
+            .thenReturn(Optional.empty());
+        when(participationRepository.countByActivityIdAndStatusIn(eq(activityId), any()))
+            .thenReturn(2); // Below max members
+        // Return 3 CONFIRMED participants (threshold met)
+        when(participationRepository.countByActivityIdAndStatus(activityId, Participation.ParticipationStatus.CONFIRMED))
+            .thenReturn(3);
+
+        // When
+        activityService.joinActivity(activityId, userId, Participation.ParticipationStatus.CONFIRMED, null);
+
+        // Then - identities should be revealed
+        assertThat(testActivity.getRevealIdentities()).isTrue();
+        verify(activityRepository).save(testActivity);
+    }
+
+    @Test
+    void joinActivity_WithThreeInterested_ShouldNotRevealIdentities() {
+        // Given - This is the critical privacy test!
+        // Even with 3+ INTERESTED, identities should NOT be revealed until 3+ CONFIRMED
+        Long activityId = 1L;
+        Long userId = 1L;
+        testActivity.setRevealIdentities(false);
+
+        when(activityRepository.findById(activityId)).thenReturn(Optional.of(testActivity));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
+        when(participationRepository.findByUserIdAndActivityId(userId, activityId))
+            .thenReturn(Optional.empty());
+        when(participationRepository.countByActivityIdAndStatusIn(eq(activityId), any()))
+            .thenReturn(2);
+        // 3 INTERESTED but only 1 CONFIRMED - should NOT reveal
+        when(participationRepository.countByActivityIdAndStatus(activityId, Participation.ParticipationStatus.CONFIRMED))
+            .thenReturn(1);
+
+        // When
+        activityService.joinActivity(activityId, userId, Participation.ParticipationStatus.INTERESTED, null);
+
+        // Then - identities should NOT be revealed (only 1 confirmed)
+        assertThat(testActivity.getRevealIdentities()).isFalse();
+        verify(activityRepository, never()).save(testActivity); // Activity not updated
     }
 
     @Test
@@ -236,7 +301,7 @@ class ActivityServiceTest {
 
         // When/Then
         assertThatThrownBy(() ->
-            activityService.joinActivity(activityId, userId, Participation.ParticipationStatus.INTERESTED))
+            activityService.joinActivity(activityId, userId, Participation.ParticipationStatus.INTERESTED, null))
             .isInstanceOf(ResourceNotFoundException.class)
             .hasMessageContaining("Activity not found");
 
@@ -255,7 +320,7 @@ class ActivityServiceTest {
 
         // When/Then
         assertThatThrownBy(() ->
-            activityService.joinActivity(activityId, userId, Participation.ParticipationStatus.INTERESTED))
+            activityService.joinActivity(activityId, userId, Participation.ParticipationStatus.INTERESTED, null))
             .isInstanceOf(ResourceNotFoundException.class)
             .hasMessageContaining("User not found");
 

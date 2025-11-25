@@ -1,7 +1,7 @@
 import React, { ReactElement } from 'react';
 import { render, RenderOptions } from '@testing-library/react-native';
-import { Provider as PaperProvider } from 'react-native-paper';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { Provider as PaperProvider, Portal } from 'react-native-paper';
+import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { UserProvider } from '../context/UserContext';
 import { theme } from '../theme';
@@ -10,15 +10,23 @@ interface AllTheProvidersProps {
   children: React.ReactNode;
 }
 
+const defaultMetrics =
+  initialWindowMetrics ?? {
+    frame: { x: 0, y: 0, width: 375, height: 667 },
+    insets: { top: 0, left: 0, right: 0, bottom: 0 },
+  };
+
 const AllTheProviders = ({ children }: AllTheProvidersProps) => {
   return (
-    <SafeAreaProvider>
+    <SafeAreaProvider initialMetrics={defaultMetrics}>
       <PaperProvider theme={theme}>
-        <UserProvider>
-          <NavigationContainer>
-            {children}
-          </NavigationContainer>
-        </UserProvider>
+        <Portal.Host>
+          <UserProvider>
+            <NavigationContainer>
+              {children}
+            </NavigationContainer>
+          </UserProvider>
+        </Portal.Host>
       </PaperProvider>
     </SafeAreaProvider>
   );
@@ -40,6 +48,7 @@ export const mockUser = {
   phone: '1234567890',
   verified: true,
   createdAt: new Date().toISOString(),
+  onboardingCompleted: true,
 };
 
 // Mock activity

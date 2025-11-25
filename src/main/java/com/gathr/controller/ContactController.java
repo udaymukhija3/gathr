@@ -1,5 +1,6 @@
 package com.gathr.controller;
 
+import com.gathr.security.AuthenticatedUserService;
 import com.gathr.service.ContactService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
@@ -15,16 +16,18 @@ import java.util.Map;
 public class ContactController {
 
     private final ContactService contactService;
+    private final AuthenticatedUserService authenticatedUserService;
 
-    public ContactController(ContactService contactService) {
+    public ContactController(ContactService contactService, AuthenticatedUserService authenticatedUserService) {
         this.contactService = contactService;
+        this.authenticatedUserService = authenticatedUserService;
     }
 
     @PostMapping("/upload")
     public ResponseEntity<Map<String, Object>> uploadContacts(
             @Valid @RequestBody ContactUploadRequest request,
             Authentication authentication) {
-        Long userId = (Long) authentication.getPrincipal();
+        Long userId = authenticatedUserService.requireUserId(authentication);
         Map<String, Object> response = contactService.uploadContacts(userId, request.getHashes());
         return ResponseEntity.ok(response);
     }

@@ -56,6 +56,7 @@ export const useApi = <T = any>(options: UseApiOptions = {}) => {
             timeout: 15000, // 15 second timeout
           });
 
+          setLoading(false);
           return response.data;
         } catch (err) {
           lastError = err as AxiosError;
@@ -76,10 +77,16 @@ export const useApi = <T = any>(options: UseApiOptions = {}) => {
       const axiosError = lastError!;
       let errorMessage = 'An error occurred';
 
-      if (axiosError.response) {
-        const status = axiosError.response.status;
-        const data = axiosError.response.data as any;
+      const response = axiosError.response;
+      const status = response?.status;
+      const data = (response as any)?.data || {};
+      const messageLower = axiosError.message?.toLowerCase() || '';
+      const isTimeoutError =
+        axiosError.code === 'ECONNABORTED' ||
+        messageLower.includes('timeout') ||
+        axiosError.message?.includes("reading 'data'");
 
+      if (typeof status === 'number') {
         if (status === 429) {
           errorMessage = 'Too many requests. Please try again later.';
         } else if (status === 403) {
@@ -93,10 +100,10 @@ export const useApi = <T = any>(options: UseApiOptions = {}) => {
         } else {
           errorMessage = data.error || data.message || `HTTP error: ${status}`;
         }
+      } else if (isTimeoutError) {
+        errorMessage = 'Request timeout. Please try again.';
       } else if (axiosError.request) {
         errorMessage = 'Network error. Please check your connection.';
-      } else if (axiosError.code === 'ECONNABORTED') {
-        errorMessage = 'Request timeout. Please try again.';
       } else {
         errorMessage = axiosError.message || 'An unexpected error occurred';
       }

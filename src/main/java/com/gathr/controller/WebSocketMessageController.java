@@ -2,6 +2,7 @@ package com.gathr.controller;
 
 import com.gathr.dto.CreateMessageRequest;
 import com.gathr.dto.MessageDto;
+import com.gathr.security.AuthenticatedUserService;
 import com.gathr.service.MessageService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,10 +21,12 @@ public class WebSocketMessageController {
 
     private final MessageService messageService;
     private final SimpMessagingTemplate messagingTemplate;
+    private final AuthenticatedUserService authenticatedUserService;
 
-    public WebSocketMessageController(MessageService messageService, SimpMessagingTemplate messagingTemplate) {
+    public WebSocketMessageController(MessageService messageService, SimpMessagingTemplate messagingTemplate, AuthenticatedUserService authenticatedUserService) {
         this.messageService = messageService;
         this.messagingTemplate = messagingTemplate;
+        this.authenticatedUserService = authenticatedUserService;
     }
 
     @MessageMapping("/activities/{activityId}/messages")
@@ -38,7 +41,7 @@ public class WebSocketMessageController {
         }
 
         try {
-            Long userId = (Long) authentication.getPrincipal();
+            Long userId = authenticatedUserService.requireUserId(authentication);
             logger.info("Received WebSocket message from user {} for activity {}", userId, activityId);
 
             // Save message to database
@@ -69,7 +72,7 @@ public class WebSocketMessageController {
             Authentication authentication) {
 
         if (authentication != null && authentication.getPrincipal() != null) {
-            Long userId = (Long) authentication.getPrincipal();
+            Long userId = authenticatedUserService.requireUserId(authentication);
 
             // Broadcast typing indicator to other users
             messagingTemplate.convertAndSend(

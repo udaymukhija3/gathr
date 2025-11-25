@@ -34,7 +34,7 @@ describe('ActivityCard', () => {
   it('shows lock icon for invite-only activities', () => {
     const inviteOnlyActivity = { ...mockActivity, isInviteOnly: true };
     const { getByText } = render(
-      <ActivityCard activity={inviteOnlyActivity} onPress={() => {}} />
+      <ActivityCard activity={inviteOnlyActivity} onPress={() => {}} onJoin={() => {}} />
     );
 
     expect(getByText('Request Invite')).toBeTruthy();
@@ -46,12 +46,12 @@ describe('ActivityCard', () => {
       peopleCount: 8,
       maxMembers: 8,
     };
-    const { getByText } = render(
+    const { getAllByText, getByText } = render(
       <ActivityCard activity={fullActivity} onPress={() => {}} onJoin={() => {}} />
     );
 
-    expect(getByText('Full')).toBeTruthy();
-    expect(getByText(/maximum participants/)).toBeTruthy();
+    expect(getAllByText('Full').length).toBeGreaterThan(0);
+    expect(getByText('This activity is full')).toBeTruthy();
   });
 
   it('disables join button when activity is full', () => {
@@ -64,7 +64,11 @@ describe('ActivityCard', () => {
       <ActivityCard activity={fullActivity} onPress={() => {}} onJoin={() => {}} />
     );
 
-    const joinButton = getByText('Full');
+    const { getAllByText } = render(
+      <ActivityCard activity={fullActivity} onPress={() => {}} onJoin={() => {}} />
+    );
+
+    const joinButton = getAllByText('Full')[0];
     expect(joinButton).toBeTruthy();
     // Button should be disabled (tested via disabled prop in component)
   });

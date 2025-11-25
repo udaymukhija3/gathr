@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
-import { TextInput, Button, Text, Surface } from 'react-native-paper';
+import React, { useState, useEffect, useCallback } from 'react';
+import { StyleSheet, KeyboardAvoidingView, Platform, View } from 'react-native';
+import { TextInput, Button, Text, Surface, HelperText } from 'react-native-paper';
 import Toast from 'react-native-toast-message';
 import { useApi } from '../hooks/useApi';
 import { trackAuth } from '../utils/telemetry';
@@ -14,15 +14,47 @@ export const PhoneEntryScreen: React.FC<PhoneEntryScreenProps> = ({ onOtpSent, n
   const [phone, setPhone] = useState('');
   const { request, loading } = useApi();
   const [error, setError] = useState('');
+  const [rateLimitedUntil, setRateLimitedUntil] = useState<Date | null>(null);
+  const [countdown, setCountdown] = useState(0);
 
   useEffect(() => {
     trackAuth.phoneEntryViewed();
+  }, []);
+
+  // Countdown timer for rate limiting
+  useEffect(() => {
+    if (!rateLimitedUntil) return;
+
+    const interval = setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((rateLimitedUntil.getTime() - Date.now()) / 1000));
+      setCountdown(remaining);
+
+      if (remaining === 0) {
+        setRateLimitedUntil(null);
+        setError('');
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [rateLimitedUntil]);
+
+  const formatCountdown = useCallback((seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    if (mins > 0) {
+      return `${mins}m ${secs}s`;
+    }
+    return `${secs}s`;
   }, []);
 
   const handleSubmit = async () => {
     if (!phone || phone.length < 10) {
       setError('Please enter a valid phone number');
       return;
+    }
+
+    if (rateLimitedUntil && Date.now() < rateLimitedUntil.getTime()) {
+      return; // Still rate limited
     }
 
     setError('');
@@ -45,17 +77,43 @@ export const PhoneEntryScreen: React.FC<PhoneEntryScreenProps> = ({ onOtpSent, n
       onOtpSent(phone);
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to send OTP';
-      setError(errorMessage);
-
       trackAuth.otpRequestFailed(phone, errorMessage);
 
-      if (errorMessage.includes('429') || errorMessage.includes('Too many requests')) {
+      // Handle specific error types
+      if (errorMessage.toLowerCase().includes('too many') || errorMessage.includes('429')) {
+        // Rate limited - set 60 second cooldown (server allows 3 per hour, but show shorter UI feedback)
+        const cooldownEnd = new Date(Date.now() + 60 * 1000);
+        setRateLimitedUntil(cooldownEnd);
+        setCountdown(60);
+        setError('Too many requests. Please wait before trying again.');
         Toast.show({
           type: 'error',
           text1: 'Rate Limit Exceeded',
-          text2: 'Please wait before requesting another OTP',
+          text2: 'You can request another OTP in 1 minute',
+        });
+      } else if (errorMessage.toLowerCase().includes('invalid phone')) {
+        setError('Invalid phone number. Please check and try again.');
+        Toast.show({
+          type: 'error',
+          text1: 'Invalid Phone Number',
+          text2: 'Please enter a valid phone number',
+        });
+      } else if (errorMessage.toLowerCase().includes('service') || errorMessage.toLowerCase().includes('unavailable')) {
+        setError('SMS service temporarily unavailable. Please try again later.');
+        Toast.show({
+          type: 'error',
+          text1: 'Service Unavailable',
+          text2: 'Please try again in a few minutes',
+        });
+      } else if (errorMessage.toLowerCase().includes('network')) {
+        setError('Network error. Please check your connection.');
+        Toast.show({
+          type: 'error',
+          text1: 'Connection Error',
+          text2: 'Please check your internet connection',
         });
       } else {
+        setError(errorMessage);
         Toast.show({
           type: 'error',
           text1: 'Error',
@@ -100,10 +158,10 @@ export const PhoneEntryScreen: React.FC<PhoneEntryScreenProps> = ({ onOtpSent, n
           mode="contained"
           onPress={handleSubmit}
           loading={loading}
-          disabled={loading}
+          disabled={loading || (rateLimitedUntil !== null && countdown > 0)}
           style={styles.button}
         >
-          Send OTP
+          {countdown > 0 ? `Try again in ${formatCountdown(countdown)}` : 'Send OTP'}
         </Button>
       </Surface>
     </KeyboardAvoidingView>

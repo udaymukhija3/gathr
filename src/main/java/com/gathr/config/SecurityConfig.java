@@ -43,7 +43,7 @@ public class SecurityConfig {
                 // Prevent MIME-sniffing (X-Content-Type-Options: nosniff)
                 .contentTypeOptions(contentTypeOptions -> {})
                 // Enable XSS protection in older browsers
-                .xssProtection(xss -> xss.headerValue("1; mode=block"))
+                .xssProtection(xss -> xss.headerValue(org.springframework.security.web.header.writers.XXssProtectionHeaderWriter.HeaderValue.ENABLED_MODE_BLOCK))
                 // Content Security Policy
                 .contentSecurityPolicy(csp -> csp
                     .policyDirectives("default-src 'self'; " +

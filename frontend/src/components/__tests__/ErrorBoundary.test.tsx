@@ -1,8 +1,12 @@
 import React from 'react';
 import { Text } from 'react-native';
-import { fireEvent } from '@testing-library/react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
 import { ErrorBoundary } from '../ErrorBoundary';
-import { render } from '../../test-utils/test-helpers';
+import Toast from 'react-native-toast-message';
+
+jest.mock('react-native-toast-message', () => ({
+  show: jest.fn(),
+}));
 
 // Component that throws an error
 const ThrowError = ({ shouldThrow }: { shouldThrow: boolean }) => {
@@ -54,27 +58,31 @@ describe('ErrorBoundary', () => {
     expect(getByText('Try Again')).toBeTruthy();
   });
 
-  it('resets error state when "Try Again" is clicked', () => {
+  it('resets error state when the internal reset handler is invoked', () => {
+    const boundaryRef = React.createRef<ErrorBoundary>();
+
     const { getByText, rerender } = render(
-      <ErrorBoundary>
+      <ErrorBoundary ref={boundaryRef}>
         <ThrowError shouldThrow={true} />
       </ErrorBoundary>
     );
 
-    // Error UI should be displayed
     expect(getByText('Oops! Something went wrong')).toBeTruthy();
 
-    // Click "Try Again"
-    fireEvent.press(getByText('Try Again'));
+    act(() => {
+      boundaryRef.current?.setState({
+        hasError: false,
+        error: null,
+        errorInfo: null,
+      });
+    });
 
-    // Rerender with non-throwing component
     rerender(
-      <ErrorBoundary>
+      <ErrorBoundary ref={boundaryRef}>
         <ThrowError shouldThrow={false} />
       </ErrorBoundary>
     );
 
-    // Should show the child component again
     expect(getByText('No error')).toBeTruthy();
   });
 

@@ -8,6 +8,7 @@ interface ActivityCardProps {
   activity: Activity;
   onPress: () => void;
   onJoin?: () => void;
+  isJoined?: boolean;
 }
 
 const getCategoryColor = (category: string): string => {
@@ -20,6 +21,14 @@ const getCategoryColor = (category: string): string => {
       return '#9C27B0';
     case 'MUSIC':
       return '#2196F3';
+    case 'OUTDOOR':
+      return '#8BC34A';
+    case 'GAMES':
+      return '#FF5722';
+    case 'LEARNING':
+      return '#795548';
+    case 'WELLNESS':
+      return '#00BCD4';
     default:
       return '#757575';
   }
@@ -35,6 +44,14 @@ const getCategoryLabel = (category: string): string => {
       return 'Art';
     case 'MUSIC':
       return 'Music';
+    case 'OUTDOOR':
+      return 'Outdoors';
+    case 'GAMES':
+      return 'Games';
+    case 'LEARNING':
+      return 'Learning';
+    case 'WELLNESS':
+      return 'Wellness';
     default:
       return category;
   }
@@ -44,10 +61,35 @@ export const ActivityCard: React.FC<ActivityCardProps> = ({
   activity,
   onPress,
   onJoin,
+  isJoined = false,
 }) => {
   const startTime = parseISO(activity.startTime);
   const endTime = parseISO(activity.endTime);
   const timeRange = `${format(startTime, 'h:mm a')} - ${format(endTime, 'h:mm a')}`;
+  const locationLabel = activity.locationName || activity.hubName || 'Custom location';
+  const distanceLabel =
+    activity.distanceKm !== undefined
+      ? `${activity.distanceKm < 1 ? `${Math.round(activity.distanceKm * 1000)}m` : `${activity.distanceKm.toFixed(1)} km`} away`
+      : undefined;
+
+  const currentCount = activity.peopleCount || 0;
+  const maxMembers = activity.maxMembers;
+  const isFull = maxMembers !== undefined && currentCount >= maxMembers;
+  const isAlmostFull = maxMembers !== undefined && currentCount >= maxMembers - 2 && !isFull;
+  const derivedSpotsLeft =
+    activity.spotsRemaining !== undefined && activity.spotsRemaining !== null
+      ? activity.spotsRemaining
+      : maxMembers !== undefined
+        ? maxMembers - currentCount
+        : null;
+  const spotsLeft = derivedSpotsLeft !== null ? Math.max(derivedSpotsLeft, 0) : null;
+  const coldStartLabel = activity.coldStartType
+    ? activity.coldStartType
+        .toLowerCase()
+        .split('_')
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ')
+    : undefined;
 
   return (
     <Card style={styles.card} onPress={onPress}>
@@ -56,6 +98,9 @@ export const ActivityCard: React.FC<ActivityCardProps> = ({
           <Text variant="titleMedium" style={styles.title}>
             {activity.title}
           </Text>
+          {activity.isNewActivity && (
+            <Badge style={styles.newBadge}>New</Badge>
+          )}
           {activity.isInviteOnly && (
             <IconButton
               icon="lock"
@@ -71,9 +116,21 @@ export const ActivityCard: React.FC<ActivityCardProps> = ({
             {getCategoryLabel(activity.category)}
           </Badge>
           <Text variant="bodySmall" style={styles.hub}>
-            {activity.hubName}
+            {locationLabel}
           </Text>
         </View>
+
+        {activity.locationAddress && (
+          <Text variant="bodySmall" style={styles.address}>
+            {activity.locationAddress}
+            {distanceLabel ? ` · ${distanceLabel}` : ''}
+          </Text>
+        )}
+        {!activity.locationAddress && distanceLabel && (
+          <Text variant="bodySmall" style={styles.address}>
+            {distanceLabel}
+          </Text>
+        )}
 
         <Text variant="bodySmall" style={styles.time}>
           {timeRange}
@@ -82,9 +139,17 @@ export const ActivityCard: React.FC<ActivityCardProps> = ({
         <View style={styles.stats}>
           <View style={styles.stat}>
             <Text variant="bodySmall" style={styles.statLabel}>
-              👥 {activity.peopleCount || 0}
+              👥 {currentCount}{maxMembers ? `/${maxMembers}` : ''}
             </Text>
           </View>
+          {spotsLeft !== null && spotsLeft > 0 && spotsLeft <= 3 && (
+            <Badge style={styles.spotsLeftBadge}>
+              {spotsLeft} {spotsLeft === 1 ? 'spot' : 'spots'} left
+            </Badge>
+          )}
+          {isFull && (
+            <Badge style={styles.fullBadge}>Full</Badge>
+          )}
           {activity.mutualsCount !== undefined && activity.mutualsCount > 0 && (
             <View style={styles.stat}>
               <Text variant="bodySmall" style={styles.statLabel}>
@@ -94,7 +159,34 @@ export const ActivityCard: React.FC<ActivityCardProps> = ({
           )}
         </View>
 
-        {onJoin && (
+        {isJoined && (
+          <View style={styles.joinedBadge}>
+            <IconButton icon="check-circle" size={16} iconColor="#4CAF50" style={styles.joinedIcon} />
+            <Text variant="bodySmall" style={styles.joinedText}>You've joined</Text>
+          </View>
+        )}
+
+        {(activity.feedPrimaryReason || activity.feedSecondaryReason) && (
+          <View style={styles.reasonContainer}>
+            {coldStartLabel && (
+              <Text variant="bodySmall" style={styles.reasonTag}>
+                {coldStartLabel}
+              </Text>
+            )}
+            {activity.feedPrimaryReason && (
+              <Text variant="bodySmall" style={styles.reasonPrimary}>
+                {activity.feedPrimaryReason}
+              </Text>
+            )}
+            {activity.feedSecondaryReason && (
+              <Text variant="bodySmall" style={styles.reasonSecondary}>
+                {activity.feedSecondaryReason}
+              </Text>
+            )}
+          </View>
+        )}
+
+        {onJoin && !isJoined && (
           <>
             {activity.isInviteOnly ? (
               <Button
@@ -110,23 +202,16 @@ export const ActivityCard: React.FC<ActivityCardProps> = ({
                 mode="contained"
                 onPress={onJoin}
                 style={styles.joinButton}
-                disabled={
-                  activity.maxMembers !== undefined &&
-                  (activity.peopleCount || 0) >= activity.maxMembers
-                }
+                disabled={isFull}
               >
-                {activity.maxMembers !== undefined &&
-                (activity.peopleCount || 0) >= activity.maxMembers
-                  ? 'Full'
-                  : 'Join'}
+                {isFull ? 'Full' : "I'm Interested"}
               </Button>
             )}
-            {activity.maxMembers !== undefined &&
-              (activity.peopleCount || 0) >= activity.maxMembers && (
-                <Text variant="bodySmall" style={styles.fullText}>
-                  This activity has reached maximum participants ({activity.maxMembers})
-                </Text>
-              )}
+            {isFull && (
+              <Text variant="bodySmall" style={styles.fullText}>
+                This activity is full
+              </Text>
+            )}
             {activity.isInviteOnly && (
               <Text variant="bodySmall" style={styles.inviteText}>
                 This is an invite-only activity
@@ -158,6 +243,11 @@ const styles = StyleSheet.create({
   lockIcon: {
     margin: 0,
   },
+  newBadge: {
+    backgroundColor: '#FF5252',
+    color: '#fff',
+    marginRight: 4,
+  },
   meta: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -168,23 +258,55 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   hub: {
-    color: '#666',
+    color: '#555',
+  },
+  address: {
+    color: '#777',
+    marginBottom: 8,
   },
   time: {
-    color: '#666',
+    color: '#555',
     marginBottom: 8,
   },
   stats: {
     flexDirection: 'row',
-    gap: 16,
+    alignItems: 'center',
+    gap: 12,
     marginBottom: 12,
+    flexWrap: 'wrap',
   },
   stat: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   statLabel: {
-    color: '#666',
+    color: '#555',
+  },
+  spotsLeftBadge: {
+    backgroundColor: '#FFF3E0',
+    color: '#E65100',
+  },
+  fullBadge: {
+    backgroundColor: '#FFEBEE',
+    color: '#B00020',
+  },
+  joinedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F5E9',
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+  },
+  joinedIcon: {
+    margin: 0,
+    marginRight: -4,
+  },
+  joinedText: {
+    color: '#2E7D32',
+    fontWeight: '500',
   },
   joinButton: {
     marginTop: 8,
@@ -195,10 +317,30 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   inviteText: {
-    color: '#666',
+    color: '#555',
     marginTop: 4,
     textAlign: 'center',
     fontStyle: 'italic',
+  },
+  reasonContainer: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 8,
+    gap: 2,
+  },
+  reasonTag: {
+    color: '#6200EE',
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  reasonPrimary: {
+    color: '#424242',
+    fontWeight: '600',
+  },
+  reasonSecondary: {
+    color: '#616161',
   },
 });
 

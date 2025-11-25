@@ -1,8 +1,17 @@
 import React from 'react';
-import { fireEvent, waitFor } from '@testing-library/react-native';
+import { fireEvent, waitFor, render as rtlRender } from '@testing-library/react-native';
 import { FeedbackModal } from '../FeedbackModal';
-import { render, mockActivity } from '../../test-utils/test-helpers';
+import { mockActivity } from '../../test-utils/test-helpers';
 import Toast from 'react-native-toast-message';
+import { Provider as PaperProvider, Portal } from 'react-native-paper';
+import { theme } from '../../theme';
+
+const render = (ui: React.ReactElement) =>
+  rtlRender(
+    <PaperProvider theme={theme}>
+      <Portal.Host>{ui}</Portal.Host>
+    </PaperProvider>
+  );
 
 jest.mock('react-native-toast-message');
 

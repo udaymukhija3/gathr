@@ -29,6 +29,9 @@ class AuthServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private OtpService otpService;
+
     private JwtUtil jwtUtil;
 
     private AuthService authService;
@@ -43,7 +46,7 @@ class AuthServiceTest {
         ReflectionTestUtils.setField(jwtUtil, "secret", "test-secret-key-must-be-at-least-256-bits-long-for-hmac-sha-algorithms");
         ReflectionTestUtils.setField(jwtUtil, "expiration", 86400000L);
 
-        authService = new AuthService(userRepository, jwtUtil);
+        authService = new AuthService(userRepository, jwtUtil, otpService);
 
         testUser = new User();
         testUser.setId(1L);

@@ -3,6 +3,7 @@ package com.gathr.service.impl;
 import com.gathr.service.OtpService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
@@ -20,14 +21,16 @@ public class MockOtpServiceImpl implements OtpService {
 
     private static final Logger logger = LoggerFactory.getLogger(MockOtpServiceImpl.class);
     private static final String MOCK_OTP = "123456";
-    private static final int OTP_EXPIRY_MINUTES = 5;
+
+    @Value("${otp.expiry-minutes:5}")
+    private int otpExpiryMinutes;
 
     // In-memory storage for OTPs (use Redis in production)
     private final Map<String, OtpEntry> otpStorage = new ConcurrentHashMap<>();
 
     @Override
     public String sendOtp(String phone) {
-        LocalDateTime expiryTime = LocalDateTime.now().plusMinutes(OTP_EXPIRY_MINUTES);
+        LocalDateTime expiryTime = LocalDateTime.now().plusMinutes(otpExpiryMinutes);
         otpStorage.put(phone, new OtpEntry(MOCK_OTP, expiryTime));
 
         logger.info("Mock OTP sent to {}: {} (expires at {})", phone, MOCK_OTP, expiryTime);

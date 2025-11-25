@@ -45,6 +45,12 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
     long countByTargetUser(User targetUser);
 
     /**
+     * Count total reports against a user by ID
+     */
+    @Query("SELECT COUNT(r) FROM Report r WHERE r.targetUser.id = :userId")
+    int countByTargetUserId(@Param("userId") Long userId);
+
+    /**
      * Count reports against a user by status
      */
     long countByTargetUserAndStatus(User targetUser, String status);

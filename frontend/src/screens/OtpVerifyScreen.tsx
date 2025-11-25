@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
-import { StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { StyleSheet, KeyboardAvoidingView, Platform, View } from 'react-native';
 import { TextInput, Button, Text, Surface } from 'react-native-paper';
 import Toast from 'react-native-toast-message';
 import { useUser } from '../context/UserContext';
 import { useApi } from '../hooks/useApi';
 import { AuthResponse } from '../types';
+import { trackAuth } from '../utils/telemetry';
 
 interface OtpVerifyScreenProps {
   phone: string;
@@ -23,11 +24,39 @@ export const OtpVerifyScreen: React.FC<OtpVerifyScreenProps> = ({
   const { login } = useUser();
   const { request, loading } = useApi();
   const [error, setError] = useState('');
+  const [attempts, setAttempts] = useState(0);
+  const [lockedUntil, setLockedUntil] = useState<Date | null>(null);
+  const [countdown, setCountdown] = useState(0);
+
+  const MAX_ATTEMPTS = 5;
+  const LOCKOUT_SECONDS = 30;
+
+  // Countdown timer for lockout
+  useEffect(() => {
+    if (!lockedUntil) return;
+
+    const interval = setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((lockedUntil.getTime() - Date.now()) / 1000));
+      setCountdown(remaining);
+
+      if (remaining === 0) {
+        setLockedUntil(null);
+        setAttempts(0);
+        setError('');
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [lockedUntil]);
 
   const handleVerify = async () => {
     if (!otp || otp.length < 4) {
       setError('Please enter a valid OTP');
       return;
+    }
+
+    if (lockedUntil && Date.now() < lockedUntil.getTime()) {
+      return; // Still locked out
     }
 
     setError('');
@@ -40,7 +69,7 @@ export const OtpVerifyScreen: React.FC<OtpVerifyScreenProps> = ({
       });
 
       await login(response);
-      
+
       Toast.show({
         type: 'success',
         text1: 'Welcome!',
@@ -55,12 +84,64 @@ export const OtpVerifyScreen: React.FC<OtpVerifyScreenProps> = ({
       }
     } catch (err: any) {
       const errorMessage = err.message || 'Invalid OTP';
-      setError(errorMessage);
-      Toast.show({
-        type: 'error',
-        text1: 'Verification Failed',
-        text2: errorMessage,
-      });
+      const newAttempts = attempts + 1;
+      setAttempts(newAttempts);
+
+      // Handle specific error types
+      if (errorMessage.toLowerCase().includes('too many') || errorMessage.includes('429')) {
+        // Rate limited by server
+        const lockoutEnd = new Date(Date.now() + 60 * 1000);
+        setLockedUntil(lockoutEnd);
+        setCountdown(60);
+        setError('Too many attempts. Please wait before trying again.');
+        Toast.show({
+          type: 'error',
+          text1: 'Too Many Attempts',
+          text2: 'Please wait 1 minute before trying again',
+        });
+      } else if (errorMessage.toLowerCase().includes('invalid') || errorMessage.toLowerCase().includes('expired')) {
+        // Wrong OTP or expired
+        if (newAttempts >= MAX_ATTEMPTS) {
+          const lockoutEnd = new Date(Date.now() + LOCKOUT_SECONDS * 1000);
+          setLockedUntil(lockoutEnd);
+          setCountdown(LOCKOUT_SECONDS);
+          setError(`Too many failed attempts. Please wait ${LOCKOUT_SECONDS} seconds.`);
+          Toast.show({
+            type: 'error',
+            text1: 'Too Many Failed Attempts',
+            text2: `Please wait ${LOCKOUT_SECONDS} seconds`,
+          });
+        } else {
+          const remainingAttempts = MAX_ATTEMPTS - newAttempts;
+          setError(`Invalid or expired OTP. ${remainingAttempts} attempt${remainingAttempts !== 1 ? 's' : ''} remaining.`);
+          Toast.show({
+            type: 'error',
+            text1: 'Invalid OTP',
+            text2: `${remainingAttempts} attempt${remainingAttempts !== 1 ? 's' : ''} remaining`,
+          });
+        }
+      } else if (errorMessage.toLowerCase().includes('network')) {
+        setError('Network error. Please check your connection.');
+        Toast.show({
+          type: 'error',
+          text1: 'Connection Error',
+          text2: 'Please check your internet connection',
+        });
+      } else if (errorMessage.toLowerCase().includes('server') || errorMessage.includes('500')) {
+        setError('Server error. Please try again later.');
+        Toast.show({
+          type: 'error',
+          text1: 'Server Error',
+          text2: 'Please try again in a few moments',
+        });
+      } else {
+        setError(errorMessage);
+        Toast.show({
+          type: 'error',
+          text1: 'Verification Failed',
+          text2: errorMessage,
+        });
+      }
     }
   };
 
@@ -106,10 +187,10 @@ export const OtpVerifyScreen: React.FC<OtpVerifyScreenProps> = ({
               mode="contained"
               onPress={handleVerify}
               loading={loading}
-              disabled={loading}
+              disabled={loading || (lockedUntil !== null && countdown > 0)}
               style={styles.button}
             >
-              Verify
+              {countdown > 0 ? `Try again in ${countdown}s` : 'Verify'}
             </Button>
 
             <Button mode="text" onPress={onBack} style={styles.backButton}>

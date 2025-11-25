@@ -4,6 +4,7 @@ import com.gathr.dto.ActivityDto;
 import com.gathr.dto.CreateActivityRequest;
 import com.gathr.entity.InviteToken;
 import com.gathr.entity.Participation;
+import com.gathr.security.AuthenticatedUserService;
 import com.gathr.service.ActivityService;
 import com.gathr.service.InviteTokenService;
 import jakarta.validation.Valid;
@@ -17,22 +18,33 @@ import java.util.Map;
 @RestController
 @RequestMapping("/activities")
 public class ActivityController {
-    
+
     private final ActivityService activityService;
     private final InviteTokenService inviteTokenService;
-    
-    public ActivityController(ActivityService activityService, InviteTokenService inviteTokenService) {
+    private final AuthenticatedUserService authenticatedUserService;
+
+    public ActivityController(ActivityService activityService, InviteTokenService inviteTokenService, AuthenticatedUserService authenticatedUserService) {
         this.activityService = activityService;
         this.inviteTokenService = inviteTokenService;
+        this.authenticatedUserService = authenticatedUserService;
     }
     
     @GetMapping
-    public ResponseEntity<List<ActivityDto>> getActivities(@RequestParam(required = false) Long hubId) {
+    public ResponseEntity<?> getActivities(
+            @RequestParam(required = false) Long hubId,
+            @RequestParam(required = false) Double latitude,
+            @RequestParam(required = false) Double longitude,
+            @RequestParam(required = false, defaultValue = "5") Double radiusKm) {
         if (hubId != null) {
             List<ActivityDto> activities = activityService.getActivitiesByHub(hubId);
             return ResponseEntity.ok(activities);
         }
-        return ResponseEntity.badRequest().build();
+        if (latitude != null && longitude != null) {
+            double radius = radiusKm != null ? radiusKm : 5d;
+            List<ActivityDto> activities = activityService.getActivitiesNearby(latitude, longitude, radius);
+            return ResponseEntity.ok(activities);
+        }
+        return ResponseEntity.badRequest().body(new ErrorResponse("Provide either hubId or latitude/longitude parameters"));
     }
 
     @GetMapping("/{id}")
@@ -45,7 +57,7 @@ public class ActivityController {
     public ResponseEntity<ActivityDto> createActivity(
             @Valid @RequestBody CreateActivityRequest request,
             Authentication authentication) {
-        Long userId = (Long) authentication.getPrincipal();
+        Long userId = authenticatedUserService.requireUserId(authentication);
         ActivityDto activity = activityService.createActivity(request, userId);
         return ResponseEntity.ok(activity);
     }
@@ -56,7 +68,7 @@ public class ActivityController {
             @RequestParam(defaultValue = "INTERESTED") String status,
             @RequestParam(required = false) String inviteToken,
             Authentication authentication) {
-        Long userId = (Long) authentication.getPrincipal();
+        Long userId = authenticatedUserService.requireUserId(authentication);
         Participation.ParticipationStatus participationStatus;
         try {
             participationStatus = Participation.ParticipationStatus.valueOf(status.toUpperCase());
@@ -72,7 +84,7 @@ public class ActivityController {
     public ResponseEntity<?> confirmActivity(
             @PathVariable Long id,
             Authentication authentication) {
-        Long userId = (Long) authentication.getPrincipal();
+        Long userId = authenticatedUserService.requireUserId(authentication);
         activityService.confirmActivity(id, userId);
         return ResponseEntity.ok().body(new MessageResponse("Successfully confirmed attendance"));
     }
@@ -81,7 +93,7 @@ public class ActivityController {
     public ResponseEntity<?> generateInviteToken(
             @PathVariable Long id,
             Authentication authentication) {
-        Long userId = (Long) authentication.getPrincipal();
+        Long userId = authenticatedUserService.requireUserId(authentication);
         InviteToken token = inviteTokenService.generateInviteToken(id, userId);
         return ResponseEntity.ok().body(Map.of(
             "token", token.getToken(),
