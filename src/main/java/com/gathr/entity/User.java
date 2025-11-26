@@ -76,6 +76,19 @@ public class User {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    // Safety & Trust fields
+    @Column(name = "contacts_opt_in")
+    private Boolean contactsOptIn = false;
+
+    @Column(length = 20)
+    private String status = "ACTIVE"; // ACTIVE, SUSPENDED, DELETED
+
+    @Column(name = "trust_score")
+    private Integer trustScore = 100;
+
+    @Column(name = "reveal_until_participants")
+    private Integer revealUntilParticipants = 3;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
@@ -86,8 +99,8 @@ public class User {
      */
     public boolean hasCompletedOnboarding() {
         return onboardingCompleted &&
-               interests != null && interests.length > 0 &&
-               name != null && !name.equals(phone); // Name should be set, not defaulting to phone
+                interests != null && interests.length > 0 &&
+                name != null && !name.equals(phone); // Name should be set, not defaulting to phone
     }
 
     /**
@@ -99,4 +112,3 @@ public class User {
         this.locationUpdatedAt = LocalDateTime.now();
     }
 }
-

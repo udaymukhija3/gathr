@@ -33,5 +33,5 @@ logs/
 .env.local
 
 # Application
-application-local.properties
+
 

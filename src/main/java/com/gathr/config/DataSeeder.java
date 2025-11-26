@@ -7,113 +7,96 @@ import com.gathr.repository.ActivityRepository;
 import com.gathr.repository.HubRepository;
 import com.gathr.repository.UserRepository;
 import org.springframework.boot.CommandLineRunner;
-import org.springframework.stereotype.Component;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 
-@Component
-public class DataSeeder implements CommandLineRunner {
-    
-    private final HubRepository hubRepository;
-    private final ActivityRepository activityRepository;
-    private final UserRepository userRepository;
-    
-    public DataSeeder(HubRepository hubRepository, 
-                     ActivityRepository activityRepository,
-                     UserRepository userRepository) {
-        this.hubRepository = hubRepository;
-        this.activityRepository = activityRepository;
-        this.userRepository = userRepository;
-    }
-    
-    @Override
-    public void run(String... args) {
-        // Check if data already exists
-        if (hubRepository.count() > 0) {
-            return;
-        }
-        
-        // Create Hubs
-        Hub cyberhub = new Hub();
-        cyberhub.setName("Cyberhub");
-        cyberhub.setArea("Cyber City");
-        cyberhub.setDescription("A bustling hub with restaurants, cafes, and entertainment venues");
-        cyberhub = hubRepository.save(cyberhub);
-        
-        Hub galleria = new Hub();
-        galleria.setName("Galleria");
-        galleria.setArea("DLF Galleria");
-        galleria.setDescription("Shopping and dining destination in the heart of Gurgaon");
-        galleria = hubRepository.save(galleria);
-        
-        Hub avenue32 = new Hub();
-        avenue32.setName("32nd Avenue");
-        avenue32.setArea("Sector 32");
-        avenue32.setDescription("Popular food and nightlife street");
-        avenue32 = hubRepository.save(avenue32);
-        
-        // Create a test user for activities
-        User testUser = new User();
-        testUser.setName("Test User");
-        testUser.setPhone("1234567890");
-        testUser.setVerified(true);
-        testUser = userRepository.save(testUser);
-        
-        // Create Activities
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime today = now.toLocalDate().atStartOfDay();
-        
-        // Activity 1: Cyberhub - Sports
-        Activity activity1 = new Activity();
-        activity1.setTitle("Badminton at Cyberhub Sports Complex");
-        activity1.setHub(cyberhub);
-        activity1.setCategory(Activity.ActivityCategory.SPORTS);
-        activity1.setStartTime(today.plusHours(18));
-        activity1.setEndTime(today.plusHours(20));
-        activity1.setCreatedBy(testUser);
-        activityRepository.save(activity1);
-        
-        // Activity 2: Cyberhub - Food
-        Activity activity2 = new Activity();
-        activity2.setTitle("Food Crawl - Cyberhub Restaurants");
-        activity2.setHub(cyberhub);
-        activity2.setCategory(Activity.ActivityCategory.FOOD);
-        activity2.setStartTime(today.plusHours(19));
-        activity2.setEndTime(today.plusHours(22));
-        activity2.setCreatedBy(testUser);
-        activityRepository.save(activity2);
-        
-        // Activity 3: Galleria - Art
-        Activity activity3 = new Activity();
-        activity3.setTitle("Art Exhibition Walk - Galleria");
-        activity3.setHub(galleria);
-        activity3.setCategory(Activity.ActivityCategory.ART);
-        activity3.setStartTime(today.plusHours(16));
-        activity3.setEndTime(today.plusHours(18));
-        activity3.setCreatedBy(testUser);
-        activityRepository.save(activity3);
-        
-        // Activity 4: 32nd Avenue - Music
-        Activity activity4 = new Activity();
-        activity4.setTitle("Live Music Night - 32nd Avenue");
-        activity4.setHub(avenue32);
-        activity4.setCategory(Activity.ActivityCategory.MUSIC);
-        activity4.setStartTime(today.plusHours(20));
-        activity4.setEndTime(today.plusHours(23));
-        activity4.setCreatedBy(testUser);
-        activityRepository.save(activity4);
-        
-        // Activity 5: Galleria - Food
-        Activity activity5 = new Activity();
-        activity5.setTitle("Coffee & Conversations - Galleria Cafe");
-        activity5.setHub(galleria);
-        activity5.setCategory(Activity.ActivityCategory.FOOD);
-        activity5.setStartTime(today.plusHours(17));
-        activity5.setEndTime(today.plusHours(19));
-        activity5.setCreatedBy(testUser);
-        activityRepository.save(activity5);
-        
-        System.out.println("Seed data created successfully!");
+@Configuration
+@Profile("local")
+public class DataSeeder {
+
+    @Bean
+    CommandLineRunner initDatabase(HubRepository hubRepository, UserRepository userRepository,
+            ActivityRepository activityRepository) {
+        return args -> {
+            if (hubRepository.count() > 0) {
+                System.out.println("Database already seeded. Skipping...");
+                return;
+            }
+
+            System.out.println("Seeding database...");
+
+            Hub downtown = new Hub();
+            downtown.setName("Downtown");
+            downtown.setSlug("downtown");
+            downtown.setCity("San Francisco");
+            downtown.setArea("City Center");
+            downtown.setLatitude(new BigDecimal("37.7749"));
+            downtown.setLongitude(new BigDecimal("-122.4194"));
+            hubRepository.save(downtown);
+
+            Hub techPark = new Hub();
+            techPark.setName("Tech Park");
+            techPark.setSlug("tech-park");
+            techPark.setCity("San Francisco");
+            techPark.setArea("SOMA");
+            techPark.setLatitude(new BigDecimal("37.7800"));
+            techPark.setLongitude(new BigDecimal("-122.4000"));
+            hubRepository.save(techPark);
+
+            // 2. Create Users
+            User alice = new User();
+            alice.setName("Alice");
+            alice.setPhone("1234567890");
+            alice.setVerified(true);
+            alice.setBio("Loves hiking and coffee.");
+            alice.setInterests(new String[] { "OUTDOOR", "FOOD" });
+            alice.setHomeHub(downtown);
+            userRepository.save(alice);
+
+            User bob = new User();
+            bob.setName("Bob");
+            bob.setPhone("0987654321");
+            bob.setVerified(true);
+            bob.setBio("Tech enthusiast and gamer.");
+            bob.setInterests(new String[] { "GAMES", "LEARNING" });
+            bob.setHomeHub(techPark);
+            userRepository.save(bob);
+
+            // 3. Create Activities
+            Activity coffeeRun = new Activity();
+            coffeeRun.setTitle("Morning Coffee Run");
+            coffeeRun.setCategory(Activity.ActivityCategory.FOOD);
+            coffeeRun.setStartTime(LocalDateTime.now().plusHours(1));
+            coffeeRun.setEndTime(LocalDateTime.now().plusHours(2));
+            coffeeRun.setHub(downtown);
+            coffeeRun.setPlaceName("Blue Bottle Coffee");
+            coffeeRun.setPlaceAddress("123 Market St");
+            coffeeRun.setLatitude(37.7750);
+            coffeeRun.setLongitude(-122.4195);
+            coffeeRun.setCreatedBy(alice);
+            coffeeRun.setMaxMembers(4);
+            activityRepository.save(coffeeRun);
+
+            Activity hiking = new Activity();
+            hiking.setTitle("Weekend Hike");
+            hiking.setCategory(Activity.ActivityCategory.OUTDOOR);
+            hiking.setStartTime(LocalDateTime.now().plusDays(1).plusHours(10));
+            hiking.setEndTime(LocalDateTime.now().plusDays(1).plusHours(14));
+            hiking.setHub(techPark); // Or null if custom location, but let's use hub for simplicity
+            hiking.setPlaceName("Twin Peaks");
+            hiking.setPlaceAddress("Twin Peaks Blvd");
+            hiking.setLatitude(37.7544);
+            hiking.setLongitude(-122.4477);
+            hiking.setCreatedBy(bob);
+            hiking.setMaxMembers(10);
+            activityRepository.save(hiking);
+
+            System.out.println("Database seeded successfully!");
+        };
     }
 }
-

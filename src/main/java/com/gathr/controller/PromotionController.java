@@ -1,6 +1,7 @@
 package com.gathr.controller;
 
 import com.gathr.entity.Promotion;
+import com.gathr.dto.common.ApiResponse;
 import com.gathr.entity.UserPromotion;
 import com.gathr.entity.User;
 import com.gathr.exception.ResourceNotFoundException;
@@ -40,7 +41,7 @@ public class PromotionController {
     }
 
     @GetMapping
-    public ResponseEntity<List<PromotionDto>> getActivePromotions(
+    public ResponseEntity<ApiResponse<List<PromotionDto>>> getActivePromotions(
             @RequestParam(required = false) String category,
             Authentication authentication) {
         authenticatedUserService.requireUserId(authentication);
@@ -58,12 +59,12 @@ public class PromotionController {
                 .map(this::toDto)
                 .toList();
 
-        return ResponseEntity.ok(dtos);
+        return ResponseEntity.ok(ApiResponse.success(dtos));
     }
 
     @GetMapping("/{promotionId}")
     @Transactional
-    public ResponseEntity<PromotionDto> getPromotion(
+    public ResponseEntity<ApiResponse<PromotionDto>> getPromotion(
             @PathVariable Long promotionId,
             Authentication authentication) {
         Long userId = authenticatedUserService.requireUserId(authentication);
@@ -74,12 +75,12 @@ public class PromotionController {
         // Track view
         trackInteraction(userId, promotion, InteractionType.VIEW);
 
-        return ResponseEntity.ok(toDto(promotion));
+        return ResponseEntity.ok(ApiResponse.success(toDto(promotion)));
     }
 
     @PostMapping("/{promotionId}/click")
     @Transactional
-    public ResponseEntity<Void> trackClick(
+    public ResponseEntity<ApiResponse<Void>> trackClick(
             @PathVariable Long promotionId,
             Authentication authentication) {
         Long userId = authenticatedUserService.requireUserId(authentication);
@@ -89,12 +90,12 @@ public class PromotionController {
 
         trackInteraction(userId, promotion, InteractionType.CLICK);
 
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(ApiResponse.success(null, "Click tracked"));
     }
 
     @PostMapping("/{promotionId}/save")
     @Transactional
-    public ResponseEntity<Void> savePromotion(
+    public ResponseEntity<ApiResponse<Void>> savePromotion(
             @PathVariable Long promotionId,
             Authentication authentication) {
         Long userId = authenticatedUserService.requireUserId(authentication);
@@ -104,12 +105,12 @@ public class PromotionController {
 
         trackInteraction(userId, promotion, InteractionType.SAVE);
 
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(ApiResponse.success(null, "Promotion saved"));
     }
 
     @DeleteMapping("/{promotionId}/save")
     @Transactional
-    public ResponseEntity<Void> unsavePromotion(
+    public ResponseEntity<ApiResponse<Void>> unsavePromotion(
             @PathVariable Long promotionId,
             Authentication authentication) {
         Long userId = authenticatedUserService.requireUserId(authentication);
@@ -120,22 +121,22 @@ public class PromotionController {
                     userPromotionRepository.save(up);
                 });
 
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(ApiResponse.success(null, "Promotion unsaved"));
     }
 
     @GetMapping("/saved")
-    public ResponseEntity<List<PromotionDto>> getSavedPromotions(Authentication authentication) {
+    public ResponseEntity<ApiResponse<List<PromotionDto>>> getSavedPromotions(Authentication authentication) {
         Long userId = authenticatedUserService.requireUserId(authentication);
 
         List<PromotionDto> saved = userPromotionRepository.findSavedByUserId(userId).stream()
                 .map(up -> toDto(up.getPromotion()))
                 .toList();
 
-        return ResponseEntity.ok(saved);
+        return ResponseEntity.ok(ApiResponse.success(saved));
     }
 
     @GetMapping("/hub/{hubId}")
-    public ResponseEntity<List<PromotionDto>> getPromotionsByHub(
+    public ResponseEntity<ApiResponse<List<PromotionDto>>> getPromotionsByHub(
             @PathVariable Long hubId,
             Authentication authentication) {
         authenticatedUserService.requireUserId(authentication);
@@ -144,7 +145,7 @@ public class PromotionController {
                 .map(this::toDto)
                 .toList();
 
-        return ResponseEntity.ok(promotions);
+        return ResponseEntity.ok(ApiResponse.success(promotions));
     }
 
     private void trackInteraction(Long userId, Promotion promotion, InteractionType type) {
@@ -182,8 +183,7 @@ public class PromotionController {
                 p.getStartsAt().toString(),
                 p.getExpiresAt().toString(),
                 p.getMaxRedemptions(),
-                p.getCurrentRedemptions()
-        );
+                p.getCurrentRedemptions());
     }
 
     private enum InteractionType {
@@ -203,6 +203,6 @@ public class PromotionController {
             String startsAt,
             String expiresAt,
             Integer maxRedemptions,
-            Integer currentRedemptions
-    ) {}
+            Integer currentRedemptions) {
+    }
 }

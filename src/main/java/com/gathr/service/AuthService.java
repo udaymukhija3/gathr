@@ -58,7 +58,7 @@ public class AuthService {
         // Find or create user
         Optional<User> userOpt = userRepository.findByPhone(request.getPhone());
         User user;
-        
+
         if (userOpt.isPresent()) {
             user = userOpt.get();
             // Mark as verified on successful OTP verification
@@ -74,19 +74,17 @@ public class AuthService {
             user.setVerified(true);
             user = userRepository.save(user);
         }
-        
+
         // Generate JWT token
         String token = jwtUtil.generateToken(user.getId(), user.getPhone());
-        
+
         UserDto userDto = new UserDto(
-            user.getId(),
-            user.getName(),
-            user.getPhone(),
-            user.getVerified(),
-            user.getCreatedAt()
-        );
-        
+                user.getId(),
+                user.getName(),
+                user.getPhone(),
+                user.getVerified(),
+                user.getCreatedAt());
+
         return new AuthResponse(token, userDto);
     }
 }
-

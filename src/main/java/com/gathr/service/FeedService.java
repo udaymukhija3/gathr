@@ -45,28 +45,30 @@ public class FeedService {
     private final ActivityService activityService;
     private final ParticipationRepository participationRepository;
     private final FeedScoringEngine feedScoringEngine;
+    private final com.gathr.config.TrustScoreProperties properties;
+    private final EventLogService eventLogService;
 
     public FeedService(
             ActivityRepository activityRepository,
             UserRepository userRepository,
             ActivityService activityService,
             ParticipationRepository participationRepository,
-            FeedScoringEngine feedScoringEngine
-    ) {
+            FeedScoringEngine feedScoringEngine,
+            com.gathr.config.TrustScoreProperties properties,
+            EventLogService eventLogService) {
         this.activityRepository = activityRepository;
         this.userRepository = userRepository;
         this.activityService = activityService;
         this.participationRepository = participationRepository;
         this.feedScoringEngine = feedScoringEngine;
+        this.properties = properties;
+        this.eventLogService = eventLogService;
     }
 
     @Transactional(readOnly = true)
-    @Cacheable(
-            cacheNames = "feed",
-            key = "T(String).format('%s:%s:%s:%s', #userId, #hubId == null ? 'default' : #hubId, " +
-                    "(#date == null ? T(java.time.LocalDate).now() : #date).toString(), #limit)",
-            condition = "#limit <= 50"
-    )
+    @Cacheable(cacheNames = "feed", key = "T(String).format('%s:%s:%s:%s', #userId, #hubId == null ? 'default' : #hubId, "
+            +
+            "(#date == null ? T(java.time.LocalDate).now() : #date).toString(), #limit)", condition = "#limit <= 50")
     public FeedComputationResult getFeedForUser(Long userId, Long hubId, LocalDate date, int limit) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", userId));
@@ -98,8 +100,7 @@ public class FeedService {
                     limit,
                     locationContext,
                     preferredHour,
-                    successCounts
-            );
+                    successCounts);
         } catch (Exception ex) {
             logger.error("Primary recommendation computation failed for user {}", userId, ex);
             activities = buildFallbackFeed(resolvedHubId, targetDate, limit);
@@ -133,9 +134,11 @@ public class FeedService {
             int limit,
             LocationContext locationContext,
             int preferredHour,
-            Map<ActivityCategory, Long> successCounts
-    ) {
-        List<Activity> activities = activityRepository.findByHubIdAndDate(hubId, targetDate);
+            Map<ActivityCategory, Long> successCounts) {
+        // Use Specification to filter at DB level
+        List<Activity> activities = activityRepository.findAll(
+                com.gathr.repository.spec.ActivitySpecification.withFilters(hubId, targetDate, userId));
+
         if (activities.isEmpty()) {
             logger.info("No activities found for hub {} on {}", hubId, targetDate);
             return List.of();
@@ -145,11 +148,15 @@ public class FeedService {
         LocalDateTime now = LocalDateTime.now();
         ColdStartType coldStartType = detectColdStartType(user, hubId);
 
-        List<Long> activityIds = activities.stream().map(Activity::getId).collect(Collectors.toList());
-        Set<Long> participatedActivityIds = new HashSet<>(participationRepository.findActivityIdsByUserIdAndActivityIds(userId, activityIds));
+        // No need to fetch participated IDs separately as they are excluded in the
+        // query
+        // But we might need them for other logic?
+        // The original code used them to filter. The specification now handles
+        // exclusion.
 
         List<ScoredActivityDto> scoredActivities = activities.stream()
-                .filter(activity -> !participatedActivityIds.contains(activity.getId()))
+                // .filter(activity -> !participatedActivityIds.contains(activity.getId())) //
+                // Handled by DB
                 .map(activity -> {
                     ActivityDto dto = activityService.convertToDto(activity, true);
                     int spotsRemaining = computeSpotsRemaining(dto);
@@ -222,8 +229,7 @@ public class FeedService {
     private List<ScoredActivityDto> applyExplorationBlend(
             List<ScoredActivityDto> scoredActivities,
             List<String> userInterests,
-            int limit
-    ) {
+            int limit) {
         if (scoredActivities.isEmpty() || userInterests == null || userInterests.size() != 1) {
             return scoredActivities;
         }
@@ -271,8 +277,7 @@ public class FeedService {
             List<ScoredActivityDto> target,
             List<ScoredActivityDto> source,
             int quota,
-            Set<ScoredActivityDto> seen
-    ) {
+            Set<ScoredActivityDto> seen) {
         int added = 0;
         for (ScoredActivityDto dto : source) {
             if (added >= quota) {
@@ -361,7 +366,8 @@ public class FeedService {
         return Math.max(0, Math.min(23, value));
     }
 
-    private FeedMeta buildFeedMeta(List<ScoredActivityDto> activities, Long hubId, LocalDate date, boolean fallbackUsed) {
+    private FeedMeta buildFeedMeta(List<ScoredActivityDto> activities, Long hubId, LocalDate date,
+            boolean fallbackUsed) {
         if (activities == null || activities.isEmpty()) {
             return FeedMeta.builder()
                     .ctaText(fallbackUsed ? "Expand your search" : "No activities available")
@@ -417,7 +423,8 @@ public class FeedService {
         }
 
         LocalDate fallbackDate = date != null ? date : LocalDate.now();
-        List<ActivityDto> fallbackDtos = activityRepository.findByHubIdAndDate(hubId, fallbackDate).stream()
+        List<ActivityDto> fallbackDtos = activityRepository.findAll(
+                com.gathr.repository.spec.ActivitySpecification.withFilters(hubId, fallbackDate, null)).stream()
                 .filter(activity -> !Boolean.TRUE.equals(activity.getIsInviteOnly()))
                 .map(activity -> activityService.convertToDto(activity, true))
                 .collect(Collectors.toList());
@@ -434,13 +441,13 @@ public class FeedService {
                     boolean available = hasAvailability(dto);
                     Map<String, Object> metadata = Map.of(
                             "fallback", true,
-                            "available", available
-                    );
+                            "available", available);
                     return ScoredActivityDto.builder()
                             .activity(dto)
                             .score(available ? 0.35 : 0.2)
                             .primaryReason(available ? "Happening soon" : "Currently full – join the waitlist")
-                            .secondaryReason(available ? "Spots available right now" : "We'll notify you if a spot opens")
+                            .secondaryReason(
+                                    available ? "Spots available right now" : "We'll notify you if a spot opens")
                             .metadata(metadata)
                             .diversityPenaltyApplied(false)
                             .build();

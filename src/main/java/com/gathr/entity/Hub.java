@@ -22,6 +22,12 @@ public class Hub {
     @Column(nullable = false)
     private String name;
 
+    @Column(nullable = false, unique = true)
+    private String slug;
+
+    @Column(nullable = false)
+    private String city;
+
     @Column(nullable = false)
     private String area;
 
@@ -56,9 +62,9 @@ public class Hub {
     private BigDecimal longitude;
 
     public enum PartnerTier {
-        FREE,     // Basic listing, no promotions
-        BASIC,    // Can create limited promotions
-        PREMIUM   // Full promotion features, priority placement
+        FREE, // Basic listing, no promotions
+        BASIC, // Can create limited promotions
+        PREMIUM // Full promotion features, priority placement
     }
 
     public boolean isVerifiedPartner() {
@@ -67,6 +73,7 @@ public class Hub {
 
     /**
      * Calculate distance to given coordinates using Haversine formula.
+     * 
      * @return distance in kilometers
      */
     public double distanceTo(BigDecimal lat, BigDecimal lng) {
@@ -82,12 +89,11 @@ public class Hub {
         double deltaLng = Math.toRadians(lng.doubleValue() - longitude.doubleValue());
 
         double a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
-                   Math.cos(lat1) * Math.cos(lat2) *
-                   Math.sin(deltaLng / 2) * Math.sin(deltaLng / 2);
+                Math.cos(lat1) * Math.cos(lat2) *
+                        Math.sin(deltaLng / 2) * Math.sin(deltaLng / 2);
 
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
         return EARTH_RADIUS_KM * c;
     }
 }
-

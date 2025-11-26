@@ -23,20 +23,18 @@ public class BlockDto {
     private Long blockedId;
     private String blockedName;
     private LocalDateTime createdAt;
-    private String reason;
 
     /**
      * Convert Block entity to DTO
      */
     public static BlockDto fromEntity(Block block) {
         return BlockDto.builder()
-            .id(block.getId())
-            .blockerId(block.getBlocker().getId())
-            .blockerName(block.getBlocker().getName())
-            .blockedId(block.getBlocked().getId())
-            .blockedName(block.getBlocked().getName())
-            .createdAt(block.getCreatedAt())
-            .reason(block.getReason())
-            .build();
+                .id(block.getId())
+                .blockerId(block.getBlocker().getId())
+                .blockerName(block.getBlocker().getName())
+                .blockedId(block.getBlocked().getId())
+                .blockedName(block.getBlocked().getName())
+                .createdAt(block.getCreatedAt())
+                .build();
     }
 }

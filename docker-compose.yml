@@ -1,9 +1,7 @@
 version: '3.8'
-
 services:
   postgres:
     image: postgres:15-alpine
-    container_name: gathr-postgres
     environment:
       POSTGRES_DB: gathr
       POSTGRES_USER: postgres
@@ -14,27 +12,9 @@ services:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
       retries: 5
 
-  app:
-    build: .
-    container_name: gathr-backend
-    ports:
-      - "8080:8080"
-    environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_NAME: gathr
-      DB_USERNAME: postgres
-      DB_PASSWORD: postgres
-      JWT_SECRET: gathr-secret-key-change-in-production-min-256-bits-very-long-secret-key-for-security
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: unless-stopped
-
 volumes:
   postgres_data:
-

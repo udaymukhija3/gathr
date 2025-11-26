@@ -3,6 +3,7 @@ package com.gathr.controller;
 import com.gathr.dto.FeedResponse;
 import com.gathr.dto.FeedInteractionRequest;
 import com.gathr.dto.ScoredActivityDto;
+import com.gathr.dto.common.ApiResponse;
 import com.gathr.entity.FeedMetric;
 import com.gathr.entity.User;
 import com.gathr.exception.ResourceNotFoundException;
@@ -40,126 +41,121 @@ import java.util.Map;
 @Slf4j
 public class FeedController {
 
-    private final FeedService feedService;
-    private final AuthenticatedUserService authenticatedUserService;
-    private final EventLogService eventLogService;
-    private final UserRepository userRepository;
-    private final SocialGraphService socialGraphService;
-    private final FeedMetricRepository feedMetricRepository;
+        private final FeedService feedService;
+        private final AuthenticatedUserService authenticatedUserService;
+        private final EventLogService eventLogService;
+        private final UserRepository userRepository;
+        private final SocialGraphService socialGraphService;
+        private final FeedMetricRepository feedMetricRepository;
 
-    @GetMapping
-    public ResponseEntity<FeedResponse> getFeed(
-            @RequestParam(required = false) Long hubId,
-            @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
-            @RequestParam(defaultValue = "20")
-            @Min(1) @Max(50) Integer limit,
-            Authentication authentication
-    ) {
-        Long userId = authenticatedUserService.requireUserId(authentication);
+        @GetMapping
+        public ResponseEntity<ApiResponse<FeedResponse>> getFeed(
+                        @RequestParam(required = false) Long hubId,
+                        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+                        @RequestParam(defaultValue = "20") @Min(1) @Max(50) Integer limit,
+                        Authentication authentication) {
+                Long userId = authenticatedUserService.requireUserId(authentication);
 
-        FeedComputationResult result = feedService.getFeedForUser(userId, hubId, date, limit);
-        List<ScoredActivityDto> activities = result.getActivities();
-        Long resolvedHubId = hubId;
-        if (resolvedHubId == null && !activities.isEmpty()) {
-            resolvedHubId = activities.get(0).getActivity().getHubId();
+                FeedComputationResult result = feedService.getFeedForUser(userId, hubId, date, limit);
+                List<ScoredActivityDto> activities = result.getActivities();
+                Long resolvedHubId = hubId;
+                if (resolvedHubId == null && !activities.isEmpty()) {
+                        resolvedHubId = activities.get(0).getActivity().getHubId();
+                }
+
+                LocalDate responseDate = date != null ? date : LocalDate.now();
+                Map<String, Object> props = new HashMap<>();
+                props.put("requestedHubId", hubId);
+                props.put("resolvedHubId", resolvedHubId);
+                props.put("date", responseDate.toString());
+                props.put("limit", limit);
+                props.put("resultCount", activities.size());
+                eventLogService.log(userId, "feed_requested", props);
+
+                FeedResponse response = FeedResponse.builder()
+                                .activities(activities)
+                                .hubId(resolvedHubId)
+                                .date(responseDate)
+                                .totalCount(activities.size())
+                                .userId(userId)
+                                .fallbackUsed(result.isFallbackUsed())
+                                .suggestions(result.getSuggestions())
+                                .meta(result.getFeedMeta())
+                                .build();
+
+                return ResponseEntity.ok(ApiResponse.success(response));
         }
 
-        LocalDate responseDate = date != null ? date : LocalDate.now();
-        Map<String, Object> props = new HashMap<>();
-        props.put("requestedHubId", hubId);
-        props.put("resolvedHubId", resolvedHubId);
-        props.put("date", responseDate.toString());
-        props.put("limit", limit);
-        props.put("resultCount", activities.size());
-        eventLogService.log(userId, "feed_requested", props);
+        @PostMapping("/feedback")
+        public ResponseEntity<ApiResponse<Void>> trackFeedback(
+                        @Valid @RequestBody FeedInteractionRequest request,
+                        Authentication authentication) {
+                Long userId = authenticatedUserService.requireUserId(authentication);
 
-        FeedResponse response = FeedResponse.builder()
-                .activities(activities)
-                .hubId(resolvedHubId)
-                .date(responseDate)
-                .totalCount(activities.size())
-                .userId(userId)
-                .fallbackUsed(result.isFallbackUsed())
-                .suggestions(result.getSuggestions())
-                .meta(result.getFeedMeta())
-                .build();
+                Map<String, Object> eventProps = new HashMap<>();
+                eventProps.put("action", request.getAction());
+                eventProps.put("position", request.getPosition());
+                eventProps.put("score", request.getScore());
+                eventProps.put("sessionId", request.getSessionId());
+                eventProps.put("hubId", request.getHubId());
+                eventLogService.log(userId, request.getActivityId(), "feed_interaction", eventProps);
 
-        return ResponseEntity.ok(response);
-    }
+                // Persist structured metrics for analytics / ML training
+                FeedMetric metric = new FeedMetric();
+                metric.setUserId(userId);
+                metric.setActivityId(request.getActivityId());
+                metric.setHubId(request.getHubId());
+                metric.setScore(request.getScore());
+                metric.setPosition(request.getPosition());
+                metric.setAction(request.getAction());
+                metric.setSessionId(request.getSessionId());
+                metric.setActionTimestamp(LocalDateTime.now());
+                feedMetricRepository.save(metric);
 
-    @PostMapping("/feedback")
-    public ResponseEntity<Void> trackFeedback(
-            @Valid @RequestBody FeedInteractionRequest request,
-            Authentication authentication
-    ) {
-        Long userId = authenticatedUserService.requireUserId(authentication);
+                switch (request.getAction()) {
+                        case "clicked" -> eventLogService.log(userId, request.getActivityId(),
+                                        "activity_clicked_from_feed", Map.of("source", "feed"));
+                        case "joined" -> eventLogService.log(userId, request.getActivityId(),
+                                        "activity_joined_from_feed", Map.of("source", "feed"));
+                        case "dismissed" -> eventLogService.log(userId, request.getActivityId(),
+                                        "activity_dismissed_from_feed", Map.of("source", "feed"));
+                        default -> {
+                        }
+                }
 
-        Map<String, Object> eventProps = new HashMap<>();
-        eventProps.put("action", request.getAction());
-        eventProps.put("position", request.getPosition());
-        eventProps.put("score", request.getScore());
-        eventProps.put("sessionId", request.getSessionId());
-        eventProps.put("hubId", request.getHubId());
-        eventLogService.log(userId, request.getActivityId(), "feed_interaction", eventProps);
-
-        // Persist structured metrics for analytics / ML training
-        FeedMetric metric = new FeedMetric();
-        metric.setUserId(userId);
-        metric.setActivityId(request.getActivityId());
-        metric.setHubId(request.getHubId());
-        metric.setScore(request.getScore());
-        metric.setPosition(request.getPosition());
-        metric.setAction(request.getAction());
-        metric.setSessionId(request.getSessionId());
-        metric.setActionTimestamp(LocalDateTime.now());
-        feedMetricRepository.save(metric);
-
-        switch (request.getAction()) {
-            case "clicked" -> eventLogService.log(userId, request.getActivityId(),
-                    "activity_clicked_from_feed", Map.of("source", "feed"));
-            case "joined" -> eventLogService.log(userId, request.getActivityId(),
-                    "activity_joined_from_feed", Map.of("source", "feed"));
-            case "dismissed" -> eventLogService.log(userId, request.getActivityId(),
-                    "activity_dismissed_from_feed", Map.of("source", "feed"));
-            default -> {
-            }
+                return ResponseEntity.ok(ApiResponse.success(null, "Feedback tracked successfully"));
         }
 
-        return ResponseEntity.ok().build();
-    }
+        @PostMapping("/refresh")
+        public ResponseEntity<ApiResponse<Map<String, String>>> refreshFeed(Authentication authentication) {
+                Long userId = authenticatedUserService.requireUserId(authentication);
+                feedService.invalidateUserFeedCache(userId);
+                eventLogService.log(userId, "feed_cache_cleared", Map.of());
 
-    @PostMapping("/refresh")
-    public ResponseEntity<Map<String, String>> refreshFeed(Authentication authentication) {
-        Long userId = authenticatedUserService.requireUserId(authentication);
-        feedService.invalidateUserFeedCache(userId);
-        eventLogService.log(userId, "feed_cache_cleared", Map.of());
+                return ResponseEntity.ok(ApiResponse.success(Map.of(
+                                "message", "Feed cache cleared",
+                                "userId", userId.toString())));
+        }
 
-        return ResponseEntity.ok(Map.of(
-                "message", "Feed cache cleared",
-                "userId", userId.toString()
-        ));
-    }
+        @GetMapping("/stats")
+        public ResponseEntity<ApiResponse<Map<String, Object>>> getFeedStats(Authentication authentication) {
+                Long userId = authenticatedUserService.requireUserId(authentication);
+                User user = userRepository.findById(userId)
+                                .orElseThrow(() -> new ResourceNotFoundException("User", userId));
 
-    @GetMapping("/stats")
-    public ResponseEntity<Map<String, Object>> getFeedStats(Authentication authentication) {
-        Long userId = authenticatedUserService.requireUserId(authentication);
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User", userId));
+                long mutualConnections = socialGraphService.countApproximateMutualConnections(userId);
+                int interestsCount = user.getInterests() != null ? user.getInterests().length : 0;
 
-        long mutualConnections = socialGraphService.countApproximateMutualConnections(userId);
-        int interestsCount = user.getInterests() != null ? user.getInterests().length : 0;
+                Map<String, Object> stats = new HashMap<>();
+                stats.put("userId", userId);
+                stats.put("personalizationEnabled", user.hasCompletedOnboarding());
+                stats.put("interestsCount", interestsCount);
+                stats.put("mutualConnectionsCount", mutualConnections);
+                stats.put("homeHubId", user.getHomeHub() != null ? user.getHomeHub().getId() : null);
+                stats.put("preferredRadiusKm", user.getPreferredRadiusKm());
+                stats.put("lastActive", user.getLastActive());
+                stats.put("cacheEnabled", true);
 
-        Map<String, Object> stats = new HashMap<>();
-        stats.put("userId", userId);
-        stats.put("personalizationEnabled", user.hasCompletedOnboarding());
-        stats.put("interestsCount", interestsCount);
-        stats.put("mutualConnectionsCount", mutualConnections);
-        stats.put("homeHubId", user.getHomeHub() != null ? user.getHomeHub().getId() : null);
-        stats.put("preferredRadiusKm", user.getPreferredRadiusKm());
-        stats.put("lastActive", user.getLastActive());
-        stats.put("cacheEnabled", true);
-
-        return ResponseEntity.ok(stats);
-    }
+                return ResponseEntity.ok(ApiResponse.success(stats));
+        }
 }

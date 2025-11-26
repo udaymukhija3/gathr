@@ -1,6 +1,7 @@
 package com.gathr.controller;
 
 import com.gathr.dto.TrustScoreDto;
+import com.gathr.dto.common.ApiResponse;
 import com.gathr.entity.User;
 import com.gathr.exception.ResourceNotFoundException;
 import com.gathr.repository.UserRepository;
@@ -22,220 +23,211 @@ import java.util.List;
 @RequestMapping("/users")
 public class UserController {
 
-    private final TrustScoreService trustScoreService;
-    private final OnboardingService onboardingService;
-    private final UserRepository userRepository;
-    private final AuthenticatedUserService authenticatedUserService;
+        private final TrustScoreService trustScoreService;
+        private final OnboardingService onboardingService;
+        private final UserRepository userRepository;
+        private final AuthenticatedUserService authenticatedUserService;
 
-    public UserController(
-            TrustScoreService trustScoreService,
-            OnboardingService onboardingService,
-            UserRepository userRepository,
-            AuthenticatedUserService authenticatedUserService) {
-        this.trustScoreService = trustScoreService;
-        this.onboardingService = onboardingService;
-        this.userRepository = userRepository;
-        this.authenticatedUserService = authenticatedUserService;
-    }
-
-    // ==================== PROFILE ====================
-
-    @GetMapping("/me")
-    public ResponseEntity<UserProfileResponse> getMyProfile(Authentication authentication) {
-        Long userId = authenticatedUserService.requireUserId(authentication);
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User", userId));
-        return ResponseEntity.ok(toProfileResponse(user));
-    }
-
-    @PutMapping("/me")
-    public ResponseEntity<UserProfileResponse> updateProfile(
-            @Valid @RequestBody UpdateProfileRequest request,
-            Authentication authentication) {
-        Long userId = authenticatedUserService.requireUserId(authentication);
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User", userId));
-
-        if (request.name() != null && !request.name().isBlank()) {
-            user.setName(request.name().trim());
-        }
-        if (request.bio() != null) {
-            user.setBio(request.bio().trim());
-        }
-        if (request.avatarUrl() != null) {
-            user.setAvatarUrl(request.avatarUrl());
+        public UserController(
+                        TrustScoreService trustScoreService,
+                        OnboardingService onboardingService,
+                        UserRepository userRepository,
+                        AuthenticatedUserService authenticatedUserService) {
+                this.trustScoreService = trustScoreService;
+                this.onboardingService = onboardingService;
+                this.userRepository = userRepository;
+                this.authenticatedUserService = authenticatedUserService;
         }
 
-        user = userRepository.save(user);
-        return ResponseEntity.ok(toProfileResponse(user));
-    }
+        // ==================== PROFILE ====================
 
-    // ==================== ONBOARDING ====================
+        @GetMapping("/me")
+        public ResponseEntity<ApiResponse<UserProfileResponse>> getMyProfile(Authentication authentication) {
+                Long userId = authenticatedUserService.requireUserId(authentication);
+                User user = userRepository.findById(userId)
+                                .orElseThrow(() -> new ResourceNotFoundException("User", userId));
+                return ResponseEntity.ok(ApiResponse.success(toProfileResponse(user)));
+        }
 
-    @PostMapping("/me/onboarding")
-    public ResponseEntity<UserProfileResponse> completeOnboarding(
-            @Valid @RequestBody OnboardingRequest request,
-            Authentication authentication) {
-        Long userId = authenticatedUserService.requireUserId(authentication);
+        @PutMapping("/me")
+        public ResponseEntity<ApiResponse<UserProfileResponse>> updateProfile(
+                        @Valid @RequestBody UpdateProfileRequest request,
+                        Authentication authentication) {
+                Long userId = authenticatedUserService.requireUserId(authentication);
+                User user = userRepository.findById(userId)
+                                .orElseThrow(() -> new ResourceNotFoundException("User", userId));
 
-        User user = onboardingService.completeOnboarding(userId, new OnboardingService.OnboardingRequest(
-                request.name(),
-                request.bio(),
-                request.avatarUrl(),
-                request.interests(),
-                request.latitude(),
-                request.longitude()
-        ));
+                if (request.name() != null && !request.name().isBlank()) {
+                        user.setName(request.name().trim());
+                }
+                if (request.bio() != null) {
+                        user.setBio(request.bio().trim());
+                }
+                if (request.avatarUrl() != null) {
+                        user.setAvatarUrl(request.avatarUrl());
+                }
 
-        return ResponseEntity.ok(toProfileResponse(user));
-    }
+                user = userRepository.save(user);
+                return ResponseEntity.ok(ApiResponse.success(toProfileResponse(user)));
+        }
 
-    @GetMapping("/me/onboarding-status")
-    public ResponseEntity<OnboardingStatusResponse> getOnboardingStatus(Authentication authentication) {
-        Long userId = authenticatedUserService.requireUserId(authentication);
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User", userId));
+        // ==================== ONBOARDING ====================
 
-        return ResponseEntity.ok(new OnboardingStatusResponse(
-                user.getOnboardingCompleted(),
-                user.getName() != null && !user.getName().equals(user.getPhone()),
-                user.getInterests() != null && user.getInterests().length > 0,
-                user.getLatitude() != null && user.getLongitude() != null,
-                user.getHomeHub() != null
-        ));
-    }
+        @PostMapping("/me/onboarding")
+        public ResponseEntity<ApiResponse<UserProfileResponse>> completeOnboarding(
+                        @Valid @RequestBody OnboardingRequest request,
+                        Authentication authentication) {
+                Long userId = authenticatedUserService.requireUserId(authentication);
 
-    // ==================== INTERESTS ====================
+                User user = onboardingService.completeOnboarding(userId, new OnboardingService.OnboardingRequest(
+                                request.name(),
+                                request.bio(),
+                                request.avatarUrl(),
+                                request.interests(),
+                                request.latitude(),
+                                request.longitude()));
 
-    @PutMapping("/me/interests")
-    public ResponseEntity<UserProfileResponse> updateInterests(
-            @Valid @RequestBody UpdateInterestsRequest request,
-            Authentication authentication) {
-        Long userId = authenticatedUserService.requireUserId(authentication);
-        User user = onboardingService.updateInterests(userId, request.interests());
-        return ResponseEntity.ok(toProfileResponse(user));
-    }
+                return ResponseEntity.ok(ApiResponse.success(toProfileResponse(user)));
+        }
 
-    // ==================== LOCATION ====================
+        @GetMapping("/me/onboarding-status")
+        public ResponseEntity<ApiResponse<OnboardingStatusResponse>> getOnboardingStatus(
+                        Authentication authentication) {
+                Long userId = authenticatedUserService.requireUserId(authentication);
+                User user = userRepository.findById(userId)
+                                .orElseThrow(() -> new ResourceNotFoundException("User", userId));
 
-    @PutMapping("/me/location")
-    public ResponseEntity<UserProfileResponse> updateLocation(
-            @Valid @RequestBody UpdateLocationRequest request,
-            Authentication authentication) {
-        Long userId = authenticatedUserService.requireUserId(authentication);
+                return ResponseEntity.ok(ApiResponse.success(new OnboardingStatusResponse(
+                                user.getOnboardingCompleted(),
+                                user.getName() != null && !user.getName().equals(user.getPhone()),
+                                user.getInterests() != null && user.getInterests().length > 0,
+                                user.getLatitude() != null && user.getLongitude() != null,
+                                user.getHomeHub() != null)));
+        }
 
-        User user = onboardingService.updateLocation(
-                userId,
-                request.latitude(),
-                request.longitude(),
-                request.reassignHub() != null && request.reassignHub()
-        );
+        // ==================== INTERESTS ====================
 
-        return ResponseEntity.ok(toProfileResponse(user));
-    }
+        @PutMapping("/me/interests")
+        public ResponseEntity<ApiResponse<UserProfileResponse>> updateInterests(
+                        @Valid @RequestBody UpdateInterestsRequest request,
+                        Authentication authentication) {
+                Long userId = authenticatedUserService.requireUserId(authentication);
+                User user = onboardingService.updateInterests(userId, request.interests());
+                return ResponseEntity.ok(ApiResponse.success(toProfileResponse(user)));
+        }
 
-    @PutMapping("/me/home-hub")
-    public ResponseEntity<UserProfileResponse> setHomeHub(
-            @Valid @RequestBody SetHomeHubRequest request,
-            Authentication authentication) {
-        Long userId = authenticatedUserService.requireUserId(authentication);
-        User user = onboardingService.setHomeHub(userId, request.hubId());
-        return ResponseEntity.ok(toProfileResponse(user));
-    }
+        // ==================== LOCATION ====================
 
-    // ==================== TRUST SCORE ====================
+        @PutMapping("/me/location")
+        public ResponseEntity<ApiResponse<UserProfileResponse>> updateLocation(
+                        @Valid @RequestBody UpdateLocationRequest request,
+                        Authentication authentication) {
+                Long userId = authenticatedUserService.requireUserId(authentication);
 
-    @GetMapping("/me/trust-score")
-    public ResponseEntity<TrustScoreDto> getMyTrustScore(Authentication authentication) {
-        Long userId = authenticatedUserService.requireUserId(authentication);
-        TrustScoreDto trustScore = trustScoreService.calculateTrustScore(userId);
-        return ResponseEntity.ok(trustScore);
-    }
+                User user = onboardingService.updateLocation(
+                                userId,
+                                request.latitude(),
+                                request.longitude(),
+                                request.reassignHub() != null && request.reassignHub());
 
-    @GetMapping("/{userId}/trust-score")
-    public ResponseEntity<TrustScoreDto> getUserTrustScore(@PathVariable Long userId) {
-        TrustScoreDto trustScore = trustScoreService.calculateTrustScore(userId);
-        return ResponseEntity.ok(trustScore);
-    }
+                return ResponseEntity.ok(ApiResponse.success(toProfileResponse(user)));
+        }
 
-    // ==================== HELPERS ====================
+        @PutMapping("/me/home-hub")
+        public ResponseEntity<ApiResponse<UserProfileResponse>> setHomeHub(
+                        @Valid @RequestBody SetHomeHubRequest request,
+                        Authentication authentication) {
+                Long userId = authenticatedUserService.requireUserId(authentication);
+                User user = onboardingService.setHomeHub(userId, request.hubId());
+                return ResponseEntity.ok(ApiResponse.success(toProfileResponse(user)));
+        }
 
-    private UserProfileResponse toProfileResponse(User user) {
-        return new UserProfileResponse(
-                user.getId(),
-                user.getName(),
-                user.getPhone(),
-                user.getBio(),
-                user.getAvatarUrl(),
-                user.getInterests() != null ? List.of(user.getInterests()) : List.of(),
-                user.getLatitude(),
-                user.getLongitude(),
-                user.getHomeHub() != null ? user.getHomeHub().getId() : null,
-                user.getHomeHub() != null ? user.getHomeHub().getName() : null,
-                user.getOnboardingCompleted(),
-                user.getVerified(),
-                user.getCreatedAt().toString()
-        );
-    }
+        // ==================== TRUST SCORE ====================
 
-    // ==================== DTOs ====================
+        @GetMapping("/me/trust-score")
+        public ResponseEntity<ApiResponse<TrustScoreDto>> getMyTrustScore(Authentication authentication) {
+                Long userId = authenticatedUserService.requireUserId(authentication);
+                TrustScoreDto trustScore = trustScoreService.calculateTrustScore(userId);
+                return ResponseEntity.ok(ApiResponse.success(trustScore));
+        }
 
-    public record UserProfileResponse(
-            Long id,
-            String name,
-            String phone,
-            String bio,
-            String avatarUrl,
-            List<String> interests,
-            BigDecimal latitude,
-            BigDecimal longitude,
-            Long homeHubId,
-            String homeHubName,
-            Boolean onboardingCompleted,
-            Boolean verified,
-            String createdAt
-    ) {}
+        @GetMapping("/{userId}/trust-score")
+        public ResponseEntity<ApiResponse<TrustScoreDto>> getUserTrustScore(@PathVariable Long userId) {
+                TrustScoreDto trustScore = trustScoreService.calculateTrustScore(userId);
+                return ResponseEntity.ok(ApiResponse.success(trustScore));
+        }
 
-    public record UpdateProfileRequest(
-            String name,
-            String bio,
-            String avatarUrl
-    ) {}
+        // ==================== HELPERS ====================
 
-    public record OnboardingRequest(
-            @NotBlank(message = "Name is required")
-            String name,
-            String bio,
-            String avatarUrl,
-            @NotEmpty(message = "At least one interest is required")
-            String[] interests,
-            BigDecimal latitude,
-            BigDecimal longitude
-    ) {}
+        private UserProfileResponse toProfileResponse(User user) {
+                return new UserProfileResponse(
+                                user.getId(),
+                                user.getName(),
+                                user.getPhone(),
+                                user.getBio(),
+                                user.getAvatarUrl(),
+                                user.getInterests() != null ? List.of(user.getInterests()) : List.of(),
+                                user.getLatitude(),
+                                user.getLongitude(),
+                                user.getHomeHub() != null ? user.getHomeHub().getId() : null,
+                                user.getHomeHub() != null ? user.getHomeHub().getName() : null,
+                                user.getOnboardingCompleted(),
+                                user.getVerified(),
+                                user.getCreatedAt().toString());
+        }
 
-    public record OnboardingStatusResponse(
-            Boolean completed,
-            Boolean hasName,
-            Boolean hasInterests,
-            Boolean hasLocation,
-            Boolean hasHomeHub
-    ) {}
+        // ==================== DTOs ====================
 
-    public record UpdateInterestsRequest(
-            @NotEmpty(message = "At least one interest is required")
-            String[] interests
-    ) {}
+        public record UserProfileResponse(
+                        Long id,
+                        String name,
+                        String phone,
+                        String bio,
+                        String avatarUrl,
+                        List<String> interests,
+                        BigDecimal latitude,
+                        BigDecimal longitude,
+                        Long homeHubId,
+                        String homeHubName,
+                        Boolean onboardingCompleted,
+                        Boolean verified,
+                        String createdAt) {
+        }
 
-    public record UpdateLocationRequest(
-            @NotNull(message = "Latitude is required")
-            BigDecimal latitude,
-            @NotNull(message = "Longitude is required")
-            BigDecimal longitude,
-            Boolean reassignHub
-    ) {}
+        public record UpdateProfileRequest(
+                        String name,
+                        String bio,
+                        String avatarUrl) {
+        }
 
-    public record SetHomeHubRequest(
-            @NotNull(message = "Hub ID is required")
-            Long hubId
-    ) {}
+        public record OnboardingRequest(
+                        @NotBlank(message = "Name is required") String name,
+                        String bio,
+                        String avatarUrl,
+                        @NotEmpty(message = "At least one interest is required") String[] interests,
+                        BigDecimal latitude,
+                        BigDecimal longitude) {
+        }
+
+        public record OnboardingStatusResponse(
+                        Boolean completed,
+                        Boolean hasName,
+                        Boolean hasInterests,
+                        Boolean hasLocation,
+                        Boolean hasHomeHub) {
+        }
+
+        public record UpdateInterestsRequest(
+                        @NotEmpty(message = "At least one interest is required") String[] interests) {
+        }
+
+        public record UpdateLocationRequest(
+                        @NotNull(message = "Latitude is required") BigDecimal latitude,
+                        @NotNull(message = "Longitude is required") BigDecimal longitude,
+                        Boolean reassignHub) {
+        }
+
+        public record SetHomeHubRequest(
+                        @NotNull(message = "Hub ID is required") Long hubId) {
+        }
 }

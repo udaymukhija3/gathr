@@ -13,108 +13,109 @@ import java.util.List;
 
 @Repository
 public interface ReportRepository extends JpaRepository<Report, Long> {
+       @Query("SELECT COUNT(DISTINCT r.reporter.id) FROM Report r WHERE r.targetUser.id = :userId")
+       long countUniqueReportersForUser(@Param("userId") Long userId);
 
-    /**
-     * Find all reports against a specific user
-     */
-    List<Report> findByTargetUser(User targetUser);
+       /**
+        * Find all reports against a specific user
+        */
+       List<Report> findByTargetUser(User targetUser);
 
-    /**
-     * Find all reports by status
-     */
-    List<Report> findByStatus(String status);
+       /**
+        * Find all reports by status
+        */
+       List<Report> findByStatus(String status);
 
-    /**
-     * Find pending reports (for moderation queue)
-     */
-    List<Report> findByStatusOrderByCreatedAtDesc(String status);
+       /**
+        * Find pending reports (for moderation queue)
+        */
+       List<Report> findByStatusOrderByCreatedAtDesc(String status);
 
-    /**
-     * Find all reports submitted by a user
-     */
-    List<Report> findByReporter(User reporter);
+       /**
+        * Find all reports submitted by a user
+        */
+       List<Report> findByReporter(User reporter);
 
-    /**
-     * Find reports for a specific activity
-     */
-    List<Report> findByActivity(Activity activity);
+       /**
+        * Find reports for a specific activity
+        */
+       List<Report> findByActivity(Activity activity);
 
-    /**
-     * Count total reports against a user
-     */
-    long countByTargetUser(User targetUser);
+       /**
+        * Count total reports against a user
+        */
+       long countByTargetUser(User targetUser);
 
-    /**
-     * Count total reports against a user by ID
-     */
-    @Query("SELECT COUNT(r) FROM Report r WHERE r.targetUser.id = :userId")
-    int countByTargetUserId(@Param("userId") Long userId);
+       /**
+        * Count total reports against a user by ID
+        */
+       @Query("SELECT COUNT(r) FROM Report r WHERE r.targetUser.id = :userId")
+       int countByTargetUserId(@Param("userId") Long userId);
 
-    /**
-     * Count reports against a user by status
-     */
-    long countByTargetUserAndStatus(User targetUser, String status);
+       /**
+        * Count reports against a user by status
+        */
+       long countByTargetUserAndStatus(User targetUser, String status);
 
-    /**
-     * Count recent reports against a user (within time window)
-     * Used for auto-ban logic
-     */
-    @Query("SELECT COUNT(r) FROM Report r " +
-           "WHERE r.targetUser.id = :userId " +
-           "AND r.createdAt >= :since")
-    long countRecentReportsByUserId(@Param("userId") Long userId,
-                                     @Param("since") LocalDateTime since);
+       /**
+        * Count recent reports against a user (within time window)
+        * Used for auto-ban logic
+        */
+       @Query("SELECT COUNT(r) FROM Report r " +
+                     "WHERE r.targetUser.id = :userId " +
+                     "AND r.createdAt >= :since")
+       long countRecentReportsByUserId(@Param("userId") Long userId,
+                     @Param("since") LocalDateTime since);
 
-    /**
-     * Count distinct reporters against a user (prevents spam from one user)
-     * Used for auto-ban logic - only count if different people reported
-     */
-    @Query("SELECT COUNT(DISTINCT r.reporter.id) FROM Report r " +
-           "WHERE r.targetUser.id = :userId " +
-           "AND r.createdAt >= :since")
-    long countDistinctReportersByUserId(@Param("userId") Long userId,
-                                         @Param("since") LocalDateTime since);
+       /**
+        * Count distinct reporters against a user (prevents spam from one user)
+        * Used for auto-ban logic - only count if different people reported
+        */
+       @Query("SELECT COUNT(DISTINCT r.reporter.id) FROM Report r " +
+                     "WHERE r.targetUser.id = :userId " +
+                     "AND r.createdAt >= :since")
+       long countDistinctReportersByUserId(@Param("userId") Long userId,
+                     @Param("since") LocalDateTime since);
 
-    /**
-     * Check if user has already reported another user
-     */
-    boolean existsByReporterAndTargetUser(User reporter, User targetUser);
+       /**
+        * Check if user has already reported another user
+        */
+       boolean existsByReporterAndTargetUser(User reporter, User targetUser);
 
-    /**
-     * Find unreviewed reports (OPEN status) ordered by creation date
-     */
-    @Query("SELECT r FROM Report r " +
-           "WHERE r.status = 'OPEN' " +
-           "ORDER BY r.createdAt ASC")
-    List<Report> findUnreviewedReports();
+       /**
+        * Find unreviewed reports (OPEN status) ordered by creation date
+        */
+       @Query("SELECT r FROM Report r " +
+                     "WHERE r.status = 'OPEN' " +
+                     "ORDER BY r.createdAt ASC")
+       List<Report> findUnreviewedReports();
 
+       /**
+        * Count total pending reports (for admin dashboard)
+        */
+       long countByStatus(String status);
 
-    /**
-     * Count total pending reports (for admin dashboard)
-     */
-    long countByStatus(String status);
+       /**
+        * Find reports by reason
+        */
+       List<Report> findByReason(String reason);
 
-    /**
-     * Find reports by reason
-     */
-    List<Report> findByReason(String reason);
+       /**
+        * Find reports created within a date range
+        */
+       @Query("SELECT r FROM Report r " +
+                     "WHERE r.createdAt BETWEEN :startDate AND :endDate " +
+                     "ORDER BY r.createdAt DESC")
+       List<Report> findByDateRange(@Param("startDate") LocalDateTime startDate,
+                     @Param("endDate") LocalDateTime endDate);
 
-    /**
-     * Find reports created within a date range
-     */
-    @Query("SELECT r FROM Report r " +
-           "WHERE r.createdAt BETWEEN :startDate AND :endDate " +
-           "ORDER BY r.createdAt DESC")
-    List<Report> findByDateRange(@Param("startDate") LocalDateTime startDate,
-                                  @Param("endDate") LocalDateTime endDate);
-
-    /**
-     * Get report statistics for a user (for risk scoring)
-     */
-    @Query("SELECT new map(" +
-           "COUNT(r) as totalReports, " +
-           "COUNT(DISTINCT r.reporter) as distinctReporters, " +
-           "MAX(r.createdAt) as lastReportDate) " +
-           "FROM Report r WHERE r.targetUser.id = :userId")
-    List<Object> getReportStatsByUserId(@Param("userId") Long userId);
+       /**
+        * Get report statistics for a user (for risk scoring)
+        */
+       @Query("SELECT new map(" +
+                     "COUNT(r) as totalReports, " +
+                     "COUNT(DISTINCT r.reporter) as distinctReporters, " +
+                     "MAX(r.createdAt) as lastReportDate) " +
+                     "FROM Report r WHERE r.targetUser.id = :userId")
+       List<Object> getReportStatsByUserId(@Param("userId") Long userId);
 }

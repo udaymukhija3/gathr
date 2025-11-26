@@ -1,13 +1,13 @@
 package com.gathr.service;
 
-import com.gathr.entity.UserPhoneHash;
-import com.gathr.repository.UserPhoneHashRepository;
+import com.gathr.repository.ContactHashRepository;
+import com.gathr.entity.ContactHash;
+import com.gathr.entity.User;
 import com.gathr.repository.UserRepository;
-import com.gathr.exception.ResourceNotFoundException;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -16,51 +16,58 @@ import java.util.stream.Collectors;
 @Service
 public class ContactService {
 
-    private final UserPhoneHashRepository userPhoneHashRepository;
+    private final ContactHashRepository contactHashRepository;
     private final UserRepository userRepository;
+    private final EventLogService eventLogService;
 
-    public ContactService(UserPhoneHashRepository userPhoneHashRepository, UserRepository userRepository) {
-        this.userPhoneHashRepository = userPhoneHashRepository;
+    public ContactService(ContactHashRepository contactHashRepository, UserRepository userRepository,
+            EventLogService eventLogService) {
+        this.contactHashRepository = contactHashRepository;
         this.userRepository = userRepository;
+        this.eventLogService = eventLogService;
     }
 
     @Transactional
     public Map<String, Object> uploadContacts(Long userId, List<String> hashes) {
-        // Verify user exists
-        userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User", userId));
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // Delete existing hashes for this user
-        userPhoneHashRepository.deleteByUserId(userId);
+        // 1. Mark user as opted-in
+        if (!Boolean.TRUE.equals(user.getContactsOptIn())) {
+            user.setContactsOptIn(true);
+            userRepository.save(user);
+        }
 
-        // Save new hashes
-        List<UserPhoneHash> phoneHashes = hashes.stream()
+        // 2. Filter existing hashes to avoid duplicates (or rely on ON CONFLICT IGNORE
+        // if using native query,
+        // but JPA batch save is easier for MVP if volume isn't huge)
+        // For MVP, we'll just delete existing and re-insert or ignore duplicates.
+        // Let's try a simple approach: fetch existing, filter, save new.
+
+        Set<String> existingHashes = contactHashRepository.findByUserId(userId).stream()
+                .map(ContactHash::getPhoneHash)
+                .collect(Collectors.toSet());
+
+        List<ContactHash> newHashes = hashes.stream()
+                .filter(hash -> !existingHashes.contains(hash))
                 .map(hash -> {
-                    UserPhoneHash userPhoneHash = new UserPhoneHash();
-                    userPhoneHash.setUser(userRepository.getReferenceById(userId));
-                    userPhoneHash.setPhoneHash(hash);
-                    return userPhoneHash;
+                    ContactHash ch = new ContactHash();
+                    ch.setUserId(userId);
+                    ch.setPhoneHash(hash);
+                    ch.setHashAlgo("sha256");
+                    return ch;
                 })
                 .collect(Collectors.toList());
 
-        userPhoneHashRepository.saveAll(phoneHashes);
-
-        // Calculate mutuals count
-        Set<String> userHashes = hashes.stream().collect(Collectors.toSet());
-        Long mutualsCount = userPhoneHashRepository.countMutualUsers(userHashes);
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("mutualsCount", mutualsCount);
-        return response;
-    }
-
-    @Transactional(readOnly = true)
-    public Long getMutualsCount(Long userId, Long otherUserId) {
-        Set<String> userHashes = userPhoneHashRepository.findPhoneHashesByUserId(userId);
-        if (userHashes.isEmpty()) {
-            return 0L;
+        if (!newHashes.isEmpty()) {
+            contactHashRepository.saveAll(newHashes);
         }
-        return userPhoneHashRepository.countMutualUsers(userHashes);
+
+        // 3. Log event
+        eventLogService.log(userId, "upload_contacts", Map.of("count", hashes.size(), "new", newHashes.size()));
+
+        return Map.of(
+                "processed", hashes.size(),
+                "new", newHashes.size());
     }
 }
-

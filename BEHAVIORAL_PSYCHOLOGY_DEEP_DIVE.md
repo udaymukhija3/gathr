@@ -1550,3 +1550,35 @@ The research is clear: This approach works. The execution is everything.
 
 **Document Version:** 1.0
 **Next Update:** After private alpha launch (user data will validate or challenge these theories)
+
+---
+
+## 12. Advanced Social Design Patterns {#advanced-patterns}
+
+### 1. The "Graceful Exit" Protocol
+**Psychological Barrier:** Fear of being trapped in an awkward interaction prevents joining.
+**Design Solution:**
+*   **Time-Boxing:** Hard stop at 90 minutes. App sends "Wrap Up" notification.
+*   **Social Alibi:** "Gathr says time's up!" gives everyone a face-saving exit.
+*   **Result:** Lowers entry barrier because the exit cost is known and low.
+
+### 2. The "Warm Handoff" UX (The Last Mile)
+**Psychological Barrier:** The "Threshold Anxiety" (60 seconds before arriving). "Will I look stupid standing alone?"
+**Design Solution:**
+*   **Commute Mode:** Unlocks 30 mins before.
+*   **Live Status:** "I'm parking", "Walking from metro", "Wearing red hat".
+*   **Result:** Bridges the gap between digital safety and physical vulnerability.
+
+### 3. Triangulation Design (The Social Object)
+**Psychological Barrier:** Direct eye contact/focus on strangers is intense and threatening.
+**Design Solution:**
+*   **UI Hierarchy:** Center the *Activity* (the "Third Object"), not the *Faces*.
+*   **Chat Prompts:** "Who is bringing the racket?" (Activity-focused) vs "Tell us about yourself" (Identity-focused).
+*   **Result:** Users bond *through* the object, reducing interpersonal pressure.
+
+### 4. Rejection Sensitivity Dysphoria (RSD) Mitigation
+**Psychological Barrier:** "Group Full" or "Request Declined" feels like personal rejection, causing immediate churn for lonely users.
+**Design Solution:**
+*   **Soft Rejection:** Never say "Declined". Say "This group is keeping it small to ensure conversation quality."
+*   **Immediate Pivot:** "But here are 2 other groups starting in 15 mins nearby."
+*   **Result:** Reframes rejection as a logistical constraint, not a social judgment.

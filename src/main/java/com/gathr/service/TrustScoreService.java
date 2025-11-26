@@ -16,7 +16,8 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 
 /**
- * Enhanced trust score service with time decay, social vouching, and activity-type weighting.
+ * Enhanced trust score service with time decay, social vouching, and
+ * activity-type weighting.
  *
  * Trust Score Components:
  * 1. Base score (100 for new users)
@@ -37,45 +38,23 @@ public class TrustScoreService {
 
     private static final Logger logger = LoggerFactory.getLogger(TrustScoreService.class);
 
-    // Base constants
-    private static final int BASE_SCORE = 100;
-    private static final int MAX_SCORE = 200;
-    private static final int MIN_SCORE = 0;
-
-    // Score adjustments
-    private static final double SHOW_UP_BONUS = 5.0;
-    private static final double NO_SHOW_PENALTY = 10.0;
-    private static final double RATING_MULTIPLIER = 10.0;
-    private static final double REPORT_PENALTY = 20.0;
-    private static final double ACTIVITY_VOLUME_BONUS = 2.0; // per activity over threshold
-    private static final int ACTIVITY_VOLUME_THRESHOLD = 5;
-
-    // Time decay constants (days)
-    private static final int POSITIVE_DECAY_PERIOD_DAYS = 90;
-    private static final double POSITIVE_DECAY_FACTOR = 0.5; // 50% decay per period
-    private static final int NEGATIVE_DECAY_PERIOD_DAYS = 90;
-    private static final double NEGATIVE_DECAY_FACTOR = 0.75; // 25% decay per period (slower)
-    private static final int REPORT_DECAY_PERIOD_DAYS = 30;
-    private static final double REPORT_DECAY_FACTOR = 0.9; // 10% decay per period (very slow)
-
-    // Account age factors
-    private static final int NEW_ACCOUNT_DAYS = 30;
-    private static final double NEW_ACCOUNT_CEILING = 0.8; // Cap at 80% of max for new accounts
-
     private final FeedbackRepository feedbackRepository;
     private final ReportRepository reportRepository;
     private final UserRepository userRepository;
     private final ParticipationRepository participationRepository;
+    private final com.gathr.config.TrustScoreProperties properties;
 
     public TrustScoreService(
             FeedbackRepository feedbackRepository,
             ReportRepository reportRepository,
             UserRepository userRepository,
-            ParticipationRepository participationRepository) {
+            ParticipationRepository participationRepository,
+            com.gathr.config.TrustScoreProperties properties) {
         this.feedbackRepository = feedbackRepository;
         this.reportRepository = reportRepository;
         this.userRepository = userRepository;
         this.participationRepository = participationRepository;
+        this.properties = properties;
     }
 
     @Transactional(readOnly = true)
@@ -93,13 +72,14 @@ public class TrustScoreService {
         double score = calculateEnhancedScore(user, showUps, noShows, averageRating, reportsAgainst);
 
         // Clamp to valid range
-        int finalScore = (int) Math.max(MIN_SCORE, Math.min(MAX_SCORE, score));
+        int finalScore = (int) Math.max(properties.getMinScore(), Math.min(properties.getMaxScore(), score));
 
-        return TrustScoreDto.calculate(userId, showUps, noShows, averageRating, reportsAgainst);
+        return TrustScoreDto.calculate(userId, showUps, noShows, averageRating, reportsAgainst, finalScore);
     }
 
     /**
-     * Calculate detailed trust breakdown for display (more granular than TrustScoreDto).
+     * Calculate detailed trust breakdown for display (more granular than
+     * TrustScoreDto).
      */
     @Transactional(readOnly = true)
     public TrustScoreBreakdown calculateDetailedTrustScore(Long userId) {
@@ -117,18 +97,20 @@ public class TrustScoreService {
         int recentReports = (int) reportRepository.countRecentReportsByUserId(userId, thirtyDaysAgo);
 
         // Calculate time-decayed values
-        double decayedShowUpBonus = calculateDecayedPositive(showUps, SHOW_UP_BONUS, user.getCreatedAt());
-        double decayedNoShowPenalty = calculateDecayedNegative(noShows, NO_SHOW_PENALTY, user.getCreatedAt());
-        double ratingBonus = averageRating != null ? averageRating * RATING_MULTIPLIER : 0;
+        double decayedShowUpBonus = calculateDecayedPositive(showUps, properties.getShowUpBonus(), user.getCreatedAt());
+        double decayedNoShowPenalty = calculateDecayedNegative(noShows, properties.getNoShowPenalty(),
+                user.getCreatedAt());
+        double ratingBonus = averageRating != null ? averageRating * properties.getRatingMultiplier() : 0;
         double decayedReportPenalty = calculateDecayedReports(reportsAgainst, recentReports);
 
         // Activity volume bonus
         int totalActivities = showUps + noShows;
-        double volumeBonus = Math.max(0, (totalActivities - ACTIVITY_VOLUME_THRESHOLD) * ACTIVITY_VOLUME_BONUS);
+        double volumeBonus = Math.max(0,
+                (totalActivities - properties.getActivityVolumeThreshold()) * properties.getActivityVolumeBonus());
         volumeBonus = Math.min(volumeBonus, 20); // Cap at +20
 
         // Calculate raw score
-        double rawScore = BASE_SCORE
+        double rawScore = properties.getBaseScore()
                 + decayedShowUpBonus
                 - decayedNoShowPenalty
                 + ratingBonus
@@ -140,7 +122,7 @@ public class TrustScoreService {
         double adjustedScore = rawScore * ageFactor;
 
         // Clamp to valid range
-        int finalScore = (int) Math.max(MIN_SCORE, Math.min(MAX_SCORE, adjustedScore));
+        int finalScore = (int) Math.max(properties.getMinScore(), Math.min(properties.getMaxScore(), adjustedScore));
 
         String trustLevel = determineTrustLevel(finalScore);
 
@@ -157,28 +139,30 @@ public class TrustScoreService {
                 decayedReportPenalty,
                 volumeBonus,
                 ageFactor,
-                trustLevel
-        );
+                trustLevel);
     }
 
-    private double calculateEnhancedScore(User user, int showUps, int noShows, Double averageRating, int reportsAgainst) {
+    private double calculateEnhancedScore(User user, int showUps, int noShows, Double averageRating,
+            int reportsAgainst) {
         // Get recent stats for weighted decay
         LocalDateTime thirtyDaysAgo = LocalDateTime.now().minusDays(30);
         int recentReports = (int) reportRepository.countRecentReportsByUserId(user.getId(), thirtyDaysAgo);
 
         // Calculate time-decayed values
-        double decayedShowUpBonus = calculateDecayedPositive(showUps, SHOW_UP_BONUS, user.getCreatedAt());
-        double decayedNoShowPenalty = calculateDecayedNegative(noShows, NO_SHOW_PENALTY, user.getCreatedAt());
-        double ratingBonus = averageRating != null ? averageRating * RATING_MULTIPLIER : 0;
+        double decayedShowUpBonus = calculateDecayedPositive(showUps, properties.getShowUpBonus(), user.getCreatedAt());
+        double decayedNoShowPenalty = calculateDecayedNegative(noShows, properties.getNoShowPenalty(),
+                user.getCreatedAt());
+        double ratingBonus = averageRating != null ? averageRating * properties.getRatingMultiplier() : 0;
         double decayedReportPenalty = calculateDecayedReports(reportsAgainst, recentReports);
 
         // Activity volume bonus
         int totalActivities = showUps + noShows;
-        double volumeBonus = Math.max(0, (totalActivities - ACTIVITY_VOLUME_THRESHOLD) * ACTIVITY_VOLUME_BONUS);
+        double volumeBonus = Math.max(0,
+                (totalActivities - properties.getActivityVolumeThreshold()) * properties.getActivityVolumeBonus());
         volumeBonus = Math.min(volumeBonus, 20); // Cap at +20
 
         // Calculate raw score
-        double rawScore = BASE_SCORE
+        double rawScore = properties.getBaseScore()
                 + decayedShowUpBonus
                 - decayedNoShowPenalty
                 + ratingBonus
@@ -196,16 +180,18 @@ public class TrustScoreService {
      * Positive signals decay faster to encourage continued good behavior.
      */
     private double calculateDecayedPositive(int count, double baseValue, LocalDateTime accountCreated) {
-        if (count <= 0) return 0;
+        if (count <= 0)
+            return 0;
 
         // Simple approximation: assume events are distributed over account lifetime
         long accountAgeDays = ChronoUnit.DAYS.between(accountCreated, LocalDateTime.now());
-        if (accountAgeDays <= 0) accountAgeDays = 1;
+        if (accountAgeDays <= 0)
+            accountAgeDays = 1;
 
         // Calculate decay factor based on average age of events
         double avgEventAgeDays = accountAgeDays / 2.0; // Assume average event is halfway through account life
-        double decayPeriods = avgEventAgeDays / POSITIVE_DECAY_PERIOD_DAYS;
-        double decayMultiplier = Math.pow(POSITIVE_DECAY_FACTOR, decayPeriods);
+        double decayPeriods = avgEventAgeDays / properties.getPositiveDecayPeriodDays();
+        double decayMultiplier = Math.pow(properties.getPositiveDecayFactor(), decayPeriods);
 
         return count * baseValue * decayMultiplier;
     }
@@ -215,14 +201,16 @@ public class TrustScoreService {
      * Negative signals decay slower to maintain accountability.
      */
     private double calculateDecayedNegative(int count, double baseValue, LocalDateTime accountCreated) {
-        if (count <= 0) return 0;
+        if (count <= 0)
+            return 0;
 
         long accountAgeDays = ChronoUnit.DAYS.between(accountCreated, LocalDateTime.now());
-        if (accountAgeDays <= 0) accountAgeDays = 1;
+        if (accountAgeDays <= 0)
+            accountAgeDays = 1;
 
         double avgEventAgeDays = accountAgeDays / 2.0;
-        double decayPeriods = avgEventAgeDays / NEGATIVE_DECAY_PERIOD_DAYS;
-        double decayMultiplier = Math.pow(NEGATIVE_DECAY_FACTOR, decayPeriods);
+        double decayPeriods = avgEventAgeDays / properties.getNegativeDecayPeriodDays();
+        double decayMultiplier = Math.pow(properties.getNegativeDecayFactor(), decayPeriods);
 
         return count * baseValue * decayMultiplier;
     }
@@ -232,15 +220,16 @@ public class TrustScoreService {
      * Recent reports weighted more heavily.
      */
     private double calculateDecayedReports(int totalReports, int recentReports) {
-        if (totalReports <= 0) return 0;
+        if (totalReports <= 0)
+            return 0;
 
         int olderReports = totalReports - recentReports;
 
         // Recent reports: full penalty
-        double recentPenalty = recentReports * REPORT_PENALTY;
+        double recentPenalty = recentReports * properties.getReportPenalty();
 
         // Older reports: decayed penalty
-        double olderPenalty = olderReports * REPORT_PENALTY * REPORT_DECAY_FACTOR;
+        double olderPenalty = olderReports * properties.getReportPenalty() * properties.getReportDecayFactor();
 
         return recentPenalty + olderPenalty;
     }
@@ -252,20 +241,24 @@ public class TrustScoreService {
     private double calculateAccountAgeFactor(LocalDateTime accountCreated) {
         long accountAgeDays = ChronoUnit.DAYS.between(accountCreated, LocalDateTime.now());
 
-        if (accountAgeDays < NEW_ACCOUNT_DAYS) {
+        if (accountAgeDays < properties.getNewAccountDays()) {
             // Linear interpolation from NEW_ACCOUNT_CEILING to 1.0
-            double progress = (double) accountAgeDays / NEW_ACCOUNT_DAYS;
-            return NEW_ACCOUNT_CEILING + (1.0 - NEW_ACCOUNT_CEILING) * progress;
+            double progress = (double) accountAgeDays / properties.getNewAccountDays();
+            return properties.getNewAccountCeiling() + (1.0 - properties.getNewAccountCeiling()) * progress;
         }
 
         return 1.0;
     }
 
     private String determineTrustLevel(int score) {
-        if (score >= 150) return "EXCELLENT";
-        if (score >= 120) return "GOOD";
-        if (score >= 90) return "FAIR";
-        if (score >= 60) return "LOW";
+        if (score >= 150)
+            return "EXCELLENT";
+        if (score >= 120)
+            return "GOOD";
+        if (score >= 90)
+            return "FAIR";
+        if (score >= 60)
+            return "LOW";
         return "POOR";
     }
 
@@ -285,6 +278,6 @@ public class TrustScoreService {
             double reportPenalty,
             double volumeBonus,
             double accountAgeFactor,
-            String trustLevel
-    ) {}
+            String trustLevel) {
+    }
 }

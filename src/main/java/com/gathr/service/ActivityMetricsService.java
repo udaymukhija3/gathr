@@ -12,7 +12,8 @@ import java.time.LocalDateTime;
 
 /**
  * Lightweight metrics service to keep track of joins/views per activity.
- * Phase 3 focuses on recording joins; views and 1hr windows can be refined later.
+ * Phase 3 focuses on recording joins; views and 1hr windows can be refined
+ * later.
  */
 @Service
 public class ActivityMetricsService {
@@ -21,7 +22,7 @@ public class ActivityMetricsService {
     private final ActivityRepository activityRepository;
 
     public ActivityMetricsService(ActivityMetricsRepository activityMetricsRepository,
-                                  ActivityRepository activityRepository) {
+            ActivityRepository activityRepository) {
         this.activityMetricsRepository = activityMetricsRepository;
         this.activityRepository = activityRepository;
     }
@@ -65,5 +66,3 @@ public class ActivityMetricsService {
         return metrics;
     }
 }
-
-

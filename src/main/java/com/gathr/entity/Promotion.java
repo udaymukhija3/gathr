@@ -6,7 +6,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity
-@Table(name = "promotions")
+@Table(name = "promo")
 public class Promotion {
 
     @Id
@@ -84,10 +84,10 @@ public class Promotion {
     }
 
     public enum DiscountType {
-        PERCENTAGE,    // X% off
-        FIXED_AMOUNT,  // $X off
-        BOGO,          // Buy one get one
-        FREE_ITEM      // Free item with purchase
+        PERCENTAGE, // X% off
+        FIXED_AMOUNT, // $X off
+        BOGO, // Buy one get one
+        FREE_ITEM // Free item with purchase
     }
 
     /**
@@ -96,16 +96,17 @@ public class Promotion {
     public boolean isValid() {
         LocalDateTime now = LocalDateTime.now();
         return isActive &&
-               now.isAfter(startsAt) &&
-               now.isBefore(expiresAt) &&
-               (maxRedemptions == null || currentRedemptions < maxRedemptions);
+                now.isAfter(startsAt) &&
+                now.isBefore(expiresAt) &&
+                (maxRedemptions == null || currentRedemptions < maxRedemptions);
     }
 
     /**
      * Check if promotion is valid for given day and time.
      */
     public boolean isValidForDayAndTime(int dayOfWeek, int minutesFromMidnight) {
-        if (!isValid()) return false;
+        if (!isValid())
+            return false;
 
         // Check day of week
         if (targetDayOfWeek != null && targetDayOfWeek.length > 0) {
@@ -116,7 +117,8 @@ public class Promotion {
                     break;
                 }
             }
-            if (!dayMatch) return false;
+            if (!dayMatch)
+                return false;
         }
 
         // Check time range

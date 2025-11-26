@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, FlatList, RefreshControl, ScrollView } from 'react-native';
-import { Text, FAB, IconButton, Button, Card, Chip, Badge } from 'react-native-paper';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View, StyleSheet, FlatList, RefreshControl } from 'react-native';
+import { Text, FAB, IconButton, Button, Card, Chip } from 'react-native-paper';
 import Toast from 'react-native-toast-message';
 import * as SecureStore from 'expo-secure-store';
 import { Activity, Hub } from '../types';
@@ -8,31 +8,17 @@ import { ActivityCard } from '../components/ActivityCard';
 import { HubSelector } from '../components/HubSelector';
 import { InviteModal } from '../components/InviteModal';
 import { FeedSkeleton } from '../components/SkeletonLoader';
-import { activitiesApi, hubsApi, feedApi, FeedMeta } from '../services/api';
-import { UserLocation, getCurrentLocation } from '../services/location';
+import { hubsApi, activitiesApi } from '../services/api';
 import { trackFeed, trackActivity } from '../utils/telemetry';
 import { useUser } from '../context/UserContext';
 import { useFeedSession } from '../hooks/useFeedSession';
-
-// Feed filter options - extended categories
-type FeedFilter = 'for_you' | 'all' | 'SPORTS' | 'FOOD' | 'ART' | 'MUSIC' | 'OUTDOOR' | 'GAMES' | 'LEARNING' | 'WELLNESS' | 'mutuals';
-
-const FILTER_OPTIONS: { key: FeedFilter; label: string; icon: string }[] = [
+import { useFeedActivities, FeedFilter } from '../hooks/useFeedActivities';
+import { useFeedLocation } from '../hooks/useFeedLocation';
+import { FeedHeader } from '../components/feed/FeedHeader';
+import { FeedFilters } from '../components/feed/FeedFilters';
+import { FeedModeToggle } from '../components/feed/FeedModeToggle';
 
 const HUB_STORAGE_KEY = 'feed:selectedHubId';
-type FeedFeedbackAction = 'viewed' | 'clicked' | 'joined' | 'dismissed';
-  { key: 'for_you', label: 'For You', icon: 'star' },
-  { key: 'all', label: 'All', icon: 'apps' },
-  { key: 'mutuals', label: 'Mutuals', icon: 'account-heart' },
-  { key: 'SPORTS', label: 'Sports', icon: 'basketball' },
-  { key: 'FOOD', label: 'Food', icon: 'food' },
-  { key: 'ART', label: 'Art', icon: 'palette' },
-  { key: 'MUSIC', label: 'Music', icon: 'music' },
-  { key: 'OUTDOOR', label: 'Outdoors', icon: 'tree' },
-  { key: 'GAMES', label: 'Games', icon: 'gamepad-variant' },
-  { key: 'LEARNING', label: 'Learning', icon: 'book-open-variant' },
-  { key: 'WELLNESS', label: 'Wellness', icon: 'meditation' },
-];
 
 interface FeedScreenProps {
   onCreateActivity: () => void;
@@ -48,24 +34,34 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
   const { user } = useUser();
   const [hubs, setHubs] = useState<Hub[]>([]);
   const [selectedHubId, setSelectedHubId] = useState<number | null>(null);
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<FeedFilter>('for_you');
+  const [feedMode, setFeedMode] = useState<'hub' | 'nearby'>('hub');
+  const [radiusKm, setRadiusKm] = useState(5);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [joiningActivityId, setJoiningActivityId] = useState<number | null>(null);
   const [joinedActivityIds, setJoinedActivityIds] = useState<Set<number>>(new Set());
-  const [activeFilter, setActiveFilter] = useState<FeedFilter>('for_you');
-  const [feedMode, setFeedMode] = useState<'hub' | 'nearby'>('hub');
-  const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
-  const [requestingLocation, setRequestingLocation] = useState(false);
-  const [radiusKm, setRadiusKm] = useState(5);
-  const [feedMeta, setFeedMeta] = useState<FeedMeta | null>(null);
-  const { resetSession: resetFeedSession, markActivitiesViewed, sendFeedback } = useFeedSession();
 
-  // Determine which filters to highlight based on user interests
-  const userInterests = user?.interests || [];
+  const { sendFeedback, resetSession } = useFeedSession();
 
+  const {
+    activities,
+    loading,
+    refreshing,
+    error,
+    feedMeta,
+    loadHubActivities,
+    loadNearbyActivities,
+    refresh
+  } = useFeedActivities({ userInterests: user?.interests || [] });
+
+  const {
+    userLocation,
+    requestingLocation,
+    requestLocation,
+    setUserLocation
+  } = useFeedLocation();
+
+  // Load Hubs & Initial Selection
   useEffect(() => {
     loadHubs();
   }, []);
@@ -77,6 +73,7 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
     }
   }, [user, selectedHubId]);
 
+  // Trigger Feed Load
   useEffect(() => {
     if (feedMode === 'hub') {
       if (selectedHubId) {
@@ -87,7 +84,7 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
     } else if (feedMode === 'nearby' && userLocation) {
       loadNearbyActivities(userLocation, activeFilter, radiusKm);
     }
-  }, [feedMode, selectedHubId, hubs, activeFilter, userLocation, radiusKm]);
+  }, [feedMode, selectedHubId, hubs, activeFilter, userLocation, radiusKm, loadHubActivities, loadNearbyActivities]);
 
   const persistSelectedHub = useCallback(async (hubId: number) => {
     try {
@@ -125,113 +122,30 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
     }
   };
 
-  const loadHubActivities = async (
-    hubId: number,
-    filter: FeedFilter = 'all',
-    options: { resetSession?: boolean } = {}
-  ) => {
-    try {
-      if (options.resetSession !== false) {
-        resetFeedSession();
-      }
-      setLoading(true);
-      setError(null);
-      const today = new Date().toISOString().split('T')[0];
+  const handleRefresh = async () => {
+    await refresh(feedMode, selectedHubId, userLocation, activeFilter, radiusKm);
+  };
 
-      let activitiesData: Activity[];
-      let payloadMeta: FeedMeta | null = null;
-
-      switch (filter) {
-        case 'for_you':
-          // Get personalized feed based on interests
-          const forYouPayload = await feedApi.getForYou(today);
-          activitiesData = forYouPayload.activities;
-          payloadMeta = forYouPayload.meta ?? null;
-          // Filter to selected hub if needed
-          if (hubId) {
-            activitiesData = activitiesData.filter(a => a.hubId === hubId);
-          }
-          break;
-        case 'mutuals':
-          const mutualPayload = await feedApi.getWithMutuals(hubId, today);
-          activitiesData = mutualPayload.activities;
-          payloadMeta = mutualPayload.meta ?? null;
-          break;
-        case 'SPORTS':
-        case 'FOOD':
-        case 'ART':
-        case 'MUSIC':
-        case 'OUTDOOR':
-        case 'GAMES':
-        case 'LEARNING':
-        case 'WELLNESS':
-          const categoryPayload = await feedApi.getByCategory(hubId, filter, today);
-          activitiesData = categoryPayload.activities;
-          payloadMeta = categoryPayload.meta ?? null;
-          break;
-        case 'all':
-        default:
-          activitiesData = await activitiesApi.getByHub(hubId, today);
-          payloadMeta = null;
-          break;
-      }
-
-      // Sort activities to prioritize user's interests
-      if (userInterests.length > 0 && filter === 'all') {
-        activitiesData = sortByInterestRelevance(activitiesData, userInterests);
-      }
-
-      setActivities(activitiesData);
-      setFeedMeta(payloadMeta);
-      markActivitiesViewed(activitiesData);
-
-      const hasPersonalization = activitiesData.some(item => (item.feedScore ?? 0) > 0);
-      trackFeed.viewed(hubId, { activityCount: activitiesData.length, filter, hasPersonalization });
-    } catch (err: any) {
-      console.error('Error loading activities:', err);
-      setError(err.message || 'Could not load activities');
-    } finally {
-      setLoading(false);
+  const handleFilterChange = (filter: FeedFilter) => {
+    if (filter !== activeFilter) {
+      setActiveFilter(filter);
+      resetSession();
+      trackFeed.filterChanged?.(selectedHubId || 0, filter);
     }
   };
 
-  const loadNearbyActivities = async (
-    location: UserLocation,
-    filter: FeedFilter = 'all',
-    radius: number = radiusKm,
-    options: { resetSession?: boolean } = {},
-  ) => {
-    try {
-      if (options.resetSession !== false) {
-        resetFeedSession();
-      }
-      setLoading(true);
-      setError(null);
-      let activitiesData = await activitiesApi.getNearby(location.latitude, location.longitude, radius);
-
-      switch (filter) {
-        case 'for_you':
-          activitiesData = sortByInterestRelevance(activitiesData, userInterests);
-          break;
-        case 'mutuals':
-          activitiesData = activitiesData.filter((activity) => (activity.mutualsCount || 0) > 0);
-          break;
-        case 'all':
-          break;
-        default:
-          activitiesData = activitiesData.filter((activity) => activity.category === filter);
-      }
-
-      setActivities(activitiesData);
-      setFeedMeta(null);
-      markActivitiesViewed(activitiesData);
-      trackFeed.viewed(undefined, { mode: 'nearby', radiusKm: radius });
-    } catch (err: any) {
-      console.error('Error loading nearby activities:', err);
-      setError(err.message || 'Could not load nearby activities');
-    } finally {
-      setLoading(false);
+  const enableNearbyMode = async () => {
+    if (!userLocation) {
+      const location = await requestLocation();
+      if (!location) return;
     }
+    resetSession();
+    setFeedMode('nearby');
+  };
+
+  const disableNearbyMode = () => {
+    resetSession();
+    setFeedMode('hub');
   };
 
   const handleCardPress = useCallback(
@@ -241,109 +155,6 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
     },
     [onActivityPress, sendFeedback]
   );
-
-  // Sort activities to show user's interests first
-  const sortByInterestRelevance = (activities: Activity[], interests: string[]): Activity[] => {
-    return [...activities].sort((a, b) => {
-      const aMatches = interests.includes(a.category);
-      const bMatches = interests.includes(b.category);
-
-      // Interest matches come first
-      if (aMatches && !bMatches) return -1;
-      if (!aMatches && bMatches) return 1;
-
-      // Then by mutual count
-      const aMutuals = a.mutualsCount || 0;
-      const bMutuals = b.mutualsCount || 0;
-      if (aMutuals !== bMutuals) return bMutuals - aMutuals;
-
-      // Then by start time
-      return new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
-    });
-  };
-
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    if (feedMode === 'nearby' && userLocation) {
-      trackFeed.refreshed(undefined, { mode: 'nearby' });
-      await loadNearbyActivities(userLocation, activeFilter, radiusKm);
-    } else if (selectedHubId) {
-      trackFeed.refreshed(selectedHubId);
-      await loadHubActivities(selectedHubId, activeFilter);
-    }
-    setRefreshing(false);
-  };
-
-  const handleFilterChange = (filter: FeedFilter) => {
-    if (filter !== activeFilter) {
-      setActiveFilter(filter);
-      resetFeedSession();
-      trackFeed.filterChanged?.(selectedHubId || 0, filter);
-    }
-  };
-
-  // Render filter chips
-  const renderFilterChips = () => (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      style={styles.filterContainer}
-      contentContainerStyle={styles.filterContent}
-    >
-      {FILTER_OPTIONS.map((option) => {
-        const isActive = activeFilter === option.key;
-        const isUserInterest = userInterests.includes(option.key);
-
-        return (
-          <Chip
-            key={option.key}
-            icon={option.icon}
-            selected={isActive}
-            onPress={() => handleFilterChange(option.key)}
-            style={[
-              styles.filterChip,
-              isActive && styles.filterChipActive,
-              isUserInterest && !isActive && styles.filterChipInterest,
-            ]}
-            textStyle={[
-              styles.filterChipText,
-              isActive && styles.filterChipTextActive,
-            ]}
-          >
-            {option.label}
-            {isUserInterest && !isActive && (
-              <Text style={styles.interestDot}> •</Text>
-            )}
-          </Chip>
-        );
-      })}
-    </ScrollView>
-  );
-
-  const enableNearbyMode = async () => {
-    if (!userLocation) {
-      setRequestingLocation(true);
-      const location = await getCurrentLocation();
-      setRequestingLocation(false);
-      if (!location) {
-        Toast.show({
-          type: 'error',
-          text1: 'Location needed',
-          text2: 'Enable location services to see nearby plans',
-        });
-        return;
-      }
-      setUserLocation(location);
-    }
-    setFeedMeta(null);
-    resetFeedSession();
-    setFeedMode('nearby');
-  };
-
-  const disableNearbyMode = () => {
-    resetFeedSession();
-    setFeedMode('hub');
-  };
 
   const handleJoin = async (activityId: number, position?: number, inviteToken?: string) => {
     const activity = activities.find(a => a.id === activityId);
@@ -388,10 +199,14 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
         text1: 'Joined!',
         text2: 'You\'re interested in this activity',
       });
-      // Refresh activities
-      if (selectedHubId) {
-        await loadHubActivities(selectedHubId, activeFilter, { resetSession: false });
+
+      // Refresh activities without resetting session
+      if (feedMode === 'hub' && selectedHubId) {
+        loadHubActivities(selectedHubId, activeFilter, { resetSession: false });
+      } else if (feedMode === 'nearby' && userLocation) {
+        loadNearbyActivities(userLocation, activeFilter, radiusKm, { resetSession: false });
       }
+
       setShowInviteModal(false);
       setJoiningActivityId(null);
     } catch (error: any) {
@@ -422,26 +237,7 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
     }
   };
 
-  // Show skeleton while initial loading
-  if (loading && activities.length === 0 && !error) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Text variant="headlineSmall" style={styles.title}>
-            Tonight
-          </Text>
-          <View style={styles.headerActions}>
-            <IconButton icon="bell-outline" size={24} disabled />
-            <IconButton icon="calendar-check" size={24} disabled />
-            <IconButton icon="account-circle" size={24} disabled />
-          </View>
-        </View>
-        <FeedSkeleton count={4} />
-      </View>
-    );
-  }
-
-  // Error state with retry
+  // Render Methods
   const renderErrorState = () => (
     <Card style={styles.errorCard}>
       <Card.Content style={styles.errorContent}>
@@ -454,13 +250,7 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
         </Text>
         <Button
           mode="contained"
-          onPress={() => {
-            if (feedMode === 'nearby' && userLocation) {
-              loadNearbyActivities(userLocation, activeFilter, radiusKm);
-            } else if (selectedHubId) {
-              loadHubActivities(selectedHubId);
-            }
-          }}
+          onPress={handleRefresh}
           style={styles.retryButton}
         >
           Try Again
@@ -469,7 +259,6 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
     </Card>
   );
 
-  // Empty state
   const renderEmptyState = () => (
     <View style={styles.empty}>
       <IconButton icon="calendar-blank-outline" size={64} iconColor="#CCC" />
@@ -493,30 +282,27 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
     </View>
   );
 
+  // Loading Skeleton
+  if (loading && activities.length === 0 && !error) {
+    return (
+      <View style={styles.container}>
+        <FeedHeader
+          onNotificationPress={() => navigation?.navigate('Notifications')}
+          onMyActivitiesPress={() => navigation?.navigate('MyActivities')}
+          onProfilePress={() => navigation?.navigate('Profile')}
+        />
+        <FeedSkeleton count={4} />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text variant="headlineSmall" style={styles.title}>
-          Tonight
-        </Text>
-        <View style={styles.headerActions}>
-          <IconButton
-            icon="bell-outline"
-            size={24}
-            onPress={() => navigation?.navigate('Notifications')}
-          />
-          <IconButton
-            icon="calendar-check"
-            size={24}
-            onPress={() => navigation?.navigate('MyActivities')}
-          />
-          <IconButton
-            icon="account-circle"
-            size={24}
-            onPress={() => navigation?.navigate('Profile')}
-          />
-        </View>
-      </View>
+      <FeedHeader
+        onNotificationPress={() => navigation?.navigate('Notifications')}
+        onMyActivitiesPress={() => navigation?.navigate('MyActivities')}
+        onProfilePress={() => navigation?.navigate('Profile')}
+      />
 
       {feedMode === 'hub' && feedMeta && (
         <View style={styles.metaBanner}>
@@ -538,25 +324,12 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
         </View>
       )}
 
-      <View style={styles.modeToggle}>
-        <Chip
-          icon="domain"
-          selected={feedMode === 'hub'}
-          onPress={disableNearbyMode}
-          style={styles.modeChip}
-        >
-          Curated Hubs
-        </Chip>
-        <Chip
-          icon="map-marker-radius"
-          selected={feedMode === 'nearby'}
-          onPress={enableNearbyMode}
-          style={styles.modeChip}
-          disabled={requestingLocation}
-        >
-          {requestingLocation ? 'Locating...' : 'Near Me'}
-        </Chip>
-      </View>
+      <FeedModeToggle
+        feedMode={feedMode}
+        requestingLocation={requestingLocation}
+        onEnableNearby={enableNearbyMode}
+        onDisableNearby={disableNearbyMode}
+      />
 
       {feedMode === 'hub' ? (
         <HubSelector
@@ -569,7 +342,7 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
             }
             setSelectedHubId(hubId);
             void persistSelectedHub(hubId);
-            resetFeedSession();
+            resetSession();
           }}
         />
       ) : (
@@ -601,8 +374,11 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
         </View>
       )}
 
-      {/* Smart Filter Chips */}
-      {renderFilterChips()}
+      <FeedFilters
+        activeFilter={activeFilter}
+        onFilterChange={handleFilterChange}
+        userInterests={user?.interests || []}
+      />
 
       {error ? (
         renderErrorState()
@@ -663,27 +439,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F5F5F5',
   },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  header: {
-    padding: 16,
-    paddingRight: 8,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  headerActions: {
-    flexDirection: 'row',
-  },
-  title: {
-    fontWeight: 'bold',
-  },
   metaBanner: {
     backgroundColor: '#F0F4FF',
     marginHorizontal: 16,
@@ -705,16 +460,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontStyle: 'italic',
   },
-  modeToggle: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    marginTop: 8,
-    gap: 8,
-  },
-  modeChip: {
-    flex: 1,
-  },
   radiusContainer: {
     paddingHorizontal: 16,
     paddingBottom: 8,
@@ -725,6 +470,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   radiusChip: {},
+  helperText: {
+    color: '#666',
+    marginBottom: 4,
+  },
   listContent: {
     paddingBottom: 80,
   },
@@ -781,39 +530,4 @@ const styles = StyleSheet.create({
     bottom: 70,
     backgroundColor: '#FFF',
   },
-  filterContainer: {
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-    maxHeight: 56,
-  },
-  filterContent: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 8,
-  },
-  filterChip: {
-    backgroundColor: '#F5F5F5',
-    marginRight: 4,
-  },
-  filterChipActive: {
-    backgroundColor: '#6200EE',
-  },
-  filterChipInterest: {
-    backgroundColor: '#F3E5F5',
-    borderColor: '#6200EE',
-    borderWidth: 1,
-  },
-  filterChipText: {
-    fontSize: 13,
-    color: '#333',
-  },
-  filterChipTextActive: {
-    color: '#FFF',
-  },
-  interestDot: {
-    color: '#6200EE',
-    fontWeight: 'bold',
-  },
 });
-

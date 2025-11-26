@@ -50,7 +50,7 @@ public class ReportService {
     public Report createReport(Long reporterId, Long targetUserId, Long activityId, String reason) {
         User reporter = userRepository.findById(reporterId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", reporterId));
-        
+
         User targetUser = userRepository.findById(targetUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", targetUserId));
 
@@ -68,6 +68,28 @@ public class ReportService {
         report.setStatus("OPEN");
 
         report = reportRepository.save(report);
+
+        // Auto-suspend logic: Check if target user has >= 2 unique reporters
+        // We can do this synchronously for MVP or async. Sync is safer for immediate
+        // action.
+        long uniqueReporters = reportRepository.countUniqueReportersForUser(targetUserId);
+        if (uniqueReporters >= 2 && !Boolean.TRUE.equals(targetUser.getIsBanned())) {
+            // Suspend user
+            targetUser.setStatus("SUSPENDED");
+            // We might want to set a suspension end time, but User entity doesn't have it
+            // explicitly yet
+            // (except maybe we can use lastActive or add a field? For MVP, just status
+            // change is enough).
+            // The audit mentioned "status = SUSPENDED for 24h".
+            // We can implement the "for 24h" part by a scheduled job that unsuspends, or
+            // just manual for now.
+            // Let's just set status to SUSPENDED.
+            userRepository.save(targetUser);
+
+            // Log suspension
+            eventLogService.log(targetUserId, "user_suspended", Map.of("reason", "auto_suspend_report_threshold"));
+            logger.info("Auto-suspended user {} due to {} unique reports", targetUserId, uniqueReporters);
+        }
 
         // Log event
         Map<String, Object> eventProps = new HashMap<>();
@@ -91,11 +113,11 @@ public class ReportService {
 
         Map<String, Object> slackPayload = new HashMap<>();
         slackPayload.put("text", "New Report Created");
-        
+
         Map<String, Object> attachment = new HashMap<>();
         attachment.put("color", "warning");
         attachment.put("title", "Report #" + report.getId());
-        
+
         StringBuilder fields = new StringBuilder();
         fields.append("Reporter ID: ").append(report.getReporter().getId()).append("\n");
         fields.append("Target User ID: ").append(report.getTargetUser().getId()).append("\n");
@@ -105,9 +127,9 @@ public class ReportService {
         fields.append("Reason: ").append(report.getReason()).append("\n");
         fields.append("Status: ").append(report.getStatus()).append("\n");
         fields.append("Created At: ").append(report.getCreatedAt()).append("\n");
-        
+
         attachment.put("text", fields.toString());
-        slackPayload.put("attachments", new Object[]{attachment});
+        slackPayload.put("attachments", new Object[] { attachment });
 
         webClient.post()
                 .uri(slackWebhookUrl)
@@ -115,8 +137,10 @@ public class ReportService {
                 .bodyValue(slackPayload)
                 .retrieve()
                 .bodyToMono(String.class)
-                .doOnSuccess(response -> logger.info("Slack notification sent successfully for report {}", report.getId()))
-                .doOnError(error -> logger.error("Failed to send Slack notification for report {}", report.getId(), error))
+                .doOnSuccess(
+                        response -> logger.info("Slack notification sent successfully for report {}", report.getId()))
+                .doOnError(
+                        error -> logger.error("Failed to send Slack notification for report {}", report.getId(), error))
                 .onErrorResume(error -> {
                     logger.error("Error sending Slack notification", error);
                     return Mono.empty();
@@ -124,4 +148,3 @@ public class ReportService {
                 .subscribe();
     }
 }
-

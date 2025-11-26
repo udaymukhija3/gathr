@@ -1,0 +1,67 @@
+{
+  "events": [
+    {
+      "name": "VIEW_FEED",
+      "payload": {
+        "hub_id": 1,
+        "lat": 28.4595,
+        "lon": 77.0266
+      },
+      "description": "Triggered when user opens the main feed"
+    },
+    {
+      "name": "VIEW_ACTIVITY_DETAIL",
+      "payload": {
+        "activity_id": 101,
+        "source": "FEED"
+      },
+      "description": "Triggered when user taps on an activity card"
+    },
+    {
+      "name": "JOIN_ATTEMPT",
+      "payload": {
+        "activity_id": 101,
+        "status": "INTERESTED"
+      },
+      "description": "Triggered when user taps 'Join'"
+    },
+    {
+      "name": "JOIN_SUCCESS",
+      "payload": {
+        "activity_id": 101
+      },
+      "description": "Triggered after successful join (backend)"
+    },
+    {
+      "name": "SEND_MESSAGE",
+      "payload": {
+        "activity_id": 101,
+        "length": 45
+      },
+      "description": "Triggered when user sends a chat message"
+    },
+    {
+      "name": "UPLOAD_CONTACTS",
+      "payload": {
+        "count": 150
+      },
+      "description": "Triggered when user syncs contacts"
+    },
+    {
+      "name": "BLOCK_USER",
+      "payload": {
+        "target_id": 55,
+        "context": "CHAT"
+      },
+      "description": "Triggered when user blocks someone"
+    },
+    {
+      "name": "APP_OPEN",
+      "payload": {
+        "device_id": "uuid-1234",
+        "time": "2025-11-26T10:00:00Z"
+      },
+      "description": "Triggered on app launch"
+    }
+  ]
+}
